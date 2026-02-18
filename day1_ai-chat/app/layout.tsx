@@ -5,7 +5,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Day1 AI Chat",
+  title: "Chat MAX",
   description: "Chat with AI powered by DeepSeek",
 };
 

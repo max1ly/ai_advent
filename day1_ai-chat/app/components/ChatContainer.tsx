@@ -11,22 +11,29 @@ interface ChatContainerProps {
 
 export default function ChatContainer({ messages, status }: ChatContainerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Derive last message text so scroll triggers on every streamed chunk
+  const lastMessageText = messages.at(-1)?.parts
+    .filter((p) => p.type === 'text')
+    .map((p: any) => p.text)
+    .join('') ?? '';
+
+  const isStreaming = status === 'streaming';
 
   useEffect(() => {
-    // Smart auto-scroll: only scroll if user is near bottom
     const container = containerRef.current;
-    const bottom = bottomRef.current;
-
-    if (!container || !bottom) return;
+    if (!container) return;
 
     const isNearBottom =
-      container.scrollHeight - container.scrollTop <= container.clientHeight + 100;
+      container.scrollHeight - container.scrollTop <= container.clientHeight + 150;
 
     if (isNearBottom) {
-      bottom.scrollIntoView({ behavior: 'smooth' });
+      // Instant scroll during streaming to avoid race condition
+      // where smooth animation can't keep up with rapid chunk updates.
+      // Smooth scroll only for discrete events (new message, status change).
+      container.scrollTop = container.scrollHeight;
     }
-  }, [messages, status]);
+  }, [messages, status, lastMessageText, isStreaming]);
 
   return (
     <div
@@ -58,7 +65,7 @@ export default function ChatContainer({ messages, status }: ChatContainerProps) 
           )}
         </>
       )}
-      <div ref={bottomRef} />
+      <div />
     </div>
   );
 }
