@@ -2,7 +2,7 @@ import { streamText, convertToModelMessages } from 'ai';
 import { deepseek } from '@/lib/deepseek';
 
 export async function POST(req: Request) {
-  const { messages, stopSequences = [] } = await req.json();
+  const { messages } = await req.json();
 
   const modelId = process.env.DEEPSEEK_MODEL ?? 'deepseek-chat';
   const systemPrompt = 'Always reply in the same language the user writes in.';
@@ -24,7 +24,6 @@ export async function POST(req: Request) {
 \x1b[36m[Chat API]\x1b[0m ─────────────────────────
   Model:          ${modelId}
   System prompt:  ${systemPrompt.length > 50 ? systemPrompt.slice(0, 50) + '...' : systemPrompt}
-  Stop sequences: ${stopSequences.length ? JSON.stringify(stopSequences) : '(none)'}
   Messages:       ${messages.length} (${roleBreakdown})
 ────────────────────────────────────`);
 
@@ -32,7 +31,6 @@ export async function POST(req: Request) {
     model: deepseek(modelId),
     system: systemPrompt,
     messages: convertedMessages,
-    stopSequences: stopSequences.length > 0 ? stopSequences : undefined,
   });
 
   return result.toUIMessageStreamResponse();
