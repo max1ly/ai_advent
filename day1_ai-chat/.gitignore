@@ -56,3 +56,9 @@ Thumbs.db
 
 # misc
 *.log
+
+#ai
+.github/
+.planning/
+.vscode/
+docs/

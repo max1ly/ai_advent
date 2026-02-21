@@ -30,6 +30,21 @@ export default function ChatMessage({ message }: ChatMessageProps) {
     );
   }
 
+  // Show loading dots if assistant message has no visible text yet
+  if (!content) {
+    return (
+      <div className="flex justify-start">
+        <div className="rounded-2xl rounded-bl-md bg-white shadow-sm border border-gray-100 px-5 py-3">
+          <div className="flex items-center gap-1">
+            <span className="animate-bounce-dots h-2 w-2 rounded-full bg-gray-400" />
+            <span className="animate-bounce-dots animation-delay-200 h-2 w-2 rounded-full bg-gray-400" />
+            <span className="animate-bounce-dots animation-delay-400 h-2 w-2 rounded-full bg-gray-400" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Assistant message with markdown rendering
   const components: Components = {
     code({ inline, className, children, ...props }: any) {

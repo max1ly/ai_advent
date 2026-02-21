@@ -6,19 +6,23 @@ import { DefaultChatTransport } from 'ai';
 import ChatContainer from './components/ChatContainer';
 import ChatInput from './components/ChatInput';
 import ErrorMessage from './components/ErrorMessage';
-import TemperatureSlider from './components/TemperatureSlider';
+import ModelSelector from './components/ModelSelector';
+import MetricsDisplay from './components/MetricsDisplay';
+import type { Metrics } from './components/MetricsDisplay';
+import { DEFAULT_MODEL } from '@/lib/models';
 
 export default function Home() {
-  const [temperature, setTemperature] = useState(1.0);
-  const temperatureRef = useRef(1.0);
+  const [model, setModel] = useState(DEFAULT_MODEL);
+  const [metrics, setMetrics] = useState<Metrics | null>(null);
+  const modelRef = useRef(model);
 
   // Keep ref in sync so transport always reads latest value
-  temperatureRef.current = temperature;
+  modelRef.current = model;
 
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
-        body: () => ({ temperature: temperatureRef.current }),
+        body: () => ({ model: modelRef.current }),
         fetch: async (input, init) => {
           if (typeof input === 'string' && input.endsWith('/api/chat') && init?.body) {
             const body = JSON.parse(init.body as string);
@@ -28,8 +32,7 @@ export default function Home() {
               'color: inherit',
               {
                 messageCount: body.messages?.length,
-                temperature: body.temperature,
-                messages: body.messages,
+                model: body.model,
               },
             );
           }
@@ -39,7 +42,14 @@ export default function Home() {
     [],
   );
 
-  const { messages, sendMessage, error, status, regenerate } = useChat({ transport });
+  const { messages, sendMessage, error, status, regenerate } = useChat({
+    transport,
+    onData: (dataPart: any) => {
+      if (dataPart.type === 'data-metrics') {
+        setMetrics(dataPart.data as Metrics);
+      }
+    },
+  });
   const [input, setInput] = useState('');
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -58,17 +68,20 @@ export default function Home() {
     <div className="flex flex-col h-screen bg-gray-50 lg:max-w-[66%] mx-auto lg:shadow-lg">
       {/* Header */}
       <header className="shadow-sm bg-white px-4 py-3 space-y-2">
-        <h1 className="text-xl font-medium tracking-tight text-gray-800">Chat MAX</h1>
-        <TemperatureSlider value={temperature} onChange={setTemperature} />
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-medium tracking-tight text-gray-800">Chat MAX</h1>
+          <ModelSelector value={model} onChange={setModel} />
+        </div>
+        <MetricsDisplay metrics={metrics} />
       </header>
 
-      {/* Messages area - takes remaining space */}
+      {/* Messages area */}
       <ChatContainer messages={messages} status={status} />
 
-      {/* Error banner - shown conditionally above input */}
+      {/* Error banner */}
       {error && <ErrorMessage error={error} onRetry={regenerate} />}
 
-      {/* Input area - fixed at bottom */}
+      {/* Input area */}
       <ChatInput
         input={input}
         handleInputChange={handleInputChange}

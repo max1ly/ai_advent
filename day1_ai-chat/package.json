@@ -11,6 +11,7 @@
   "dependencies": {
     "@ai-sdk/deepseek": "^2.0.20",
     "@ai-sdk/react": "^3.0.88",
+    "@openrouter/ai-sdk-provider": "^2.2.3",
     "@tailwindcss/typography": "^0.5.19",
     "@types/node": "^25.2.3",
     "@types/react": "^18.3.18",
