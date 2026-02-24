@@ -3,23 +3,15 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
-import type { UIMessage } from '@ai-sdk/react';
+import type { DisplayMessage } from '@/lib/types';
 
 interface ChatMessageProps {
-  message: UIMessage;
-}
-
-// Helper to extract text content from UIMessage parts
-function getTextContent(message: UIMessage): string {
-  return message.parts
-    .filter((part) => part.type === 'text')
-    .map((part: any) => part.text)
-    .join('');
+  message: DisplayMessage;
 }
 
 export default function ChatMessage({ message }: ChatMessageProps) {
   const role = message.role;
-  const content = getTextContent(message);
+  const content = message.content;
   if (role === 'user') {
     return (
       <div className="flex justify-end">

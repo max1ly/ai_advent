@@ -2,22 +2,17 @@
 
 import { useEffect, useRef } from 'react';
 import ChatMessage from './ChatMessage';
-import type { UIMessage } from '@ai-sdk/react';
+import type { DisplayMessage } from '@/lib/types';
 
 interface ChatContainerProps {
-  messages: UIMessage[];
+  messages: DisplayMessage[];
   status: string;
 }
 
 export default function ChatContainer({ messages, status }: ChatContainerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Derive last message text so scroll triggers on every streamed chunk
-  const lastMessageText = messages.at(-1)?.parts
-    .filter((p) => p.type === 'text')
-    .map((p: any) => p.text)
-    .join('') ?? '';
-
+  const lastMessageText = messages.at(-1)?.content ?? '';
   const isStreaming = status === 'streaming';
 
   useEffect(() => {
@@ -28,9 +23,6 @@ export default function ChatContainer({ messages, status }: ChatContainerProps) 
       container.scrollHeight - container.scrollTop <= container.clientHeight + 150;
 
     if (isNearBottom) {
-      // Instant scroll during streaming to avoid race condition
-      // where smooth animation can't keep up with rapid chunk updates.
-      // Smooth scroll only for discrete events (new message, status change).
       container.scrollTop = container.scrollHeight;
     }
   }, [messages, status, lastMessageText, isStreaming]);

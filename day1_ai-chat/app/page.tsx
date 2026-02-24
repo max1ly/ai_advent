@@ -1,68 +1,133 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
-import { useChat } from '@ai-sdk/react';
-import { DefaultChatTransport } from 'ai';
+import { useCallback, useRef, useState } from 'react';
 import ChatContainer from './components/ChatContainer';
 import ChatInput from './components/ChatInput';
 import ErrorMessage from './components/ErrorMessage';
 import ModelSelector from './components/ModelSelector';
 import MetricsDisplay from './components/MetricsDisplay';
 import type { Metrics } from './components/MetricsDisplay';
+import type { DisplayMessage } from '@/lib/types';
 import { DEFAULT_MODEL } from '@/lib/models';
 
 export default function Home() {
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
-  const modelRef = useRef(model);
-
-  // Keep ref in sync so transport always reads latest value
-  modelRef.current = model;
-
-  const transport = useMemo(
-    () =>
-      new DefaultChatTransport({
-        body: () => ({ model: modelRef.current }),
-        fetch: async (input, init) => {
-          if (typeof input === 'string' && input.endsWith('/api/chat') && init?.body) {
-            const body = JSON.parse(init.body as string);
-            console.log(
-              '%c[Chat API]%c Request',
-              'color: #0ea5e9; font-weight: bold',
-              'color: inherit',
-              {
-                messageCount: body.messages?.length,
-                model: body.model,
-              },
-            );
-          }
-          return globalThis.fetch(input, init);
-        },
-      }),
-    [],
-  );
-
-  const { messages, sendMessage, error, status, regenerate } = useChat({
-    transport,
-    onData: (dataPart: any) => {
-      if (dataPart.type === 'data-metrics') {
-        setMetrics(dataPart.data as Metrics);
-      }
-    },
-  });
+  const [messages, setMessages] = useState<DisplayMessage[]>([]);
+  const [status, setStatus] = useState<'ready' | 'submitted' | 'streaming'>('ready');
+  const [error, setError] = useState<Error | null>(null);
   const [input, setInput] = useState('');
+  const sessionIdRef = useRef<string | null>(null);
+  const msgCounterRef = useRef(0);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim()) return;
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      const text = input.trim();
+      if (!text || status !== 'ready') return;
 
-    sendMessage({ text: input });
-    setInput('');
-  };
+      setInput('');
+      setError(null);
+
+      // Add user message to display
+      const userMsg: DisplayMessage = {
+        id: String(++msgCounterRef.current),
+        role: 'user',
+        content: text,
+      };
+      const assistantMsg: DisplayMessage = {
+        id: String(++msgCounterRef.current),
+        role: 'assistant',
+        content: '',
+      };
+      setMessages((prev) => [...prev, userMsg, assistantMsg]);
+      setStatus('submitted');
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: text,
+            sessionId: sessionIdRef.current,
+            model,
+          }),
+        });
+
+        if (!res.ok) {
+          throw new Error(`Server error: ${res.status}`);
+        }
+
+        // Capture session ID from response
+        const sid = res.headers.get('x-session-id');
+        if (sid) {
+          sessionIdRef.current = sid;
+        }
+
+        const reader = res.body!.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let assistantText = '';
+
+        setStatus('streaming');
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop()!; // keep incomplete last line
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
+            const event = JSON.parse(line.slice(6));
+
+            if (event.type === 'text-delta') {
+              assistantText += event.delta;
+              setMessages((prev) => {
+                const updated = [...prev];
+                updated[updated.length - 1] = {
+                  ...updated[updated.length - 1],
+                  content: assistantText,
+                };
+                return updated;
+              });
+            } else if (event.type === 'data-metrics') {
+              setMetrics(event.data as Metrics);
+            }
+          }
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error(String(err)));
+        // Remove the empty assistant message on error
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.role === 'assistant' && !last.content) {
+            return prev.slice(0, -1);
+          }
+          return prev;
+        });
+      } finally {
+        setStatus('ready');
+      }
+    },
+    [input, model, status],
+  );
+
+  const handleRetry = useCallback(() => {
+    setError(null);
+    setMessages((prev) => {
+      const withoutLast = prev.filter(
+        (_, i) => !(i === prev.length - 1 && prev[i].role === 'assistant' && !prev[i].content),
+      );
+      return withoutLast;
+    });
+  }, []);
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 lg:max-w-[66%] mx-auto lg:shadow-lg">
@@ -79,7 +144,7 @@ export default function Home() {
       <ChatContainer messages={messages} status={status} />
 
       {/* Error banner */}
-      {error && <ErrorMessage error={error} onRetry={regenerate} />}
+      {error && <ErrorMessage error={error} onRetry={handleRetry} />}
 
       {/* Input area */}
       <ChatInput
