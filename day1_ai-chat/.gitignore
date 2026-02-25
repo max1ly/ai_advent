@@ -57,6 +57,9 @@ Thumbs.db
 # misc
 *.log
 
+# database
+data/
+
 #ai
 .github/
 .planning/
