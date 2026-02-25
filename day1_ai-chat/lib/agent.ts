@@ -12,15 +12,26 @@ export class ChatAgent {
   private history: Message[] = [];
   private modelConfig: ModelConfig;
   private systemPrompt: string;
+  private onMessagePersist?: (role: string, content: string) => void;
 
-  constructor(opts?: { model?: string; systemPrompt?: string }) {
+  constructor(opts?: {
+    model?: string;
+    systemPrompt?: string;
+    history?: Message[];
+    onMessagePersist?: (role: string, content: string) => void;
+  }) {
     this.modelConfig =
       MODELS.find((m) => m.id === opts?.model) ?? MODELS[1];
     this.systemPrompt = opts?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
+    if (opts?.history) {
+      this.history = opts.history;
+    }
+    this.onMessagePersist = opts?.onMessagePersist;
   }
 
   chat(userMessage: string) {
     this.history.push({ role: 'user', content: userMessage });
+    this.onMessagePersist?.('user', userMessage);
 
     const { modelConfig, systemPrompt, history } = this;
     const modelInstance =
@@ -46,6 +57,7 @@ export class ChatAgent {
           onFinish: ({ text, usage }) => {
             // Append assistant response to history
             this.history.push({ role: 'assistant', content: text });
+            this.onMessagePersist?.('assistant', text);
 
             const elapsed = Date.now() - startTime;
             const inputTokens = usage?.inputTokens ?? 0;
