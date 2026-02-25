@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import ChatContainer from './components/ChatContainer';
 import ChatInput from './components/ChatInput';
 import ErrorMessage from './components/ErrorMessage';
@@ -19,6 +19,42 @@ export default function Home() {
   const [input, setInput] = useState('');
   const sessionIdRef = useRef<string | null>(null);
   const msgCounterRef = useRef(0);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const savedSessionId = localStorage.getItem('chat-session-id');
+    if (!savedSessionId) {
+      setIsLoading(false);
+      return;
+    }
+
+    sessionIdRef.current = savedSessionId;
+    fetch(`/api/chat/${savedSessionId}`)
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to load history');
+        return res.json();
+      })
+      .then((data) => {
+        if (data.messages?.length > 0) {
+          const displayMessages: DisplayMessage[] = data.messages.map(
+            (m: { role: string; content: string }) => ({
+              id: String(++msgCounterRef.current),
+              role: m.role as 'user' | 'assistant',
+              content: m.content,
+            }),
+          );
+          setMessages(displayMessages);
+        }
+      })
+      .catch(() => {
+        // Session not found or error — start fresh
+        localStorage.removeItem('chat-session-id');
+        sessionIdRef.current = null;
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
@@ -66,6 +102,7 @@ export default function Home() {
         const sid = res.headers.get('x-session-id');
         if (sid) {
           sessionIdRef.current = sid;
+          localStorage.setItem('chat-session-id', sid);
         }
 
         const reader = res.body!.getReader();
@@ -151,7 +188,7 @@ export default function Home() {
         input={input}
         handleInputChange={handleInputChange}
         handleSubmit={handleSubmit}
-        isLoading={status !== 'ready'}
+        isLoading={status !== 'ready' || isLoading}
       />
     </div>
   );
