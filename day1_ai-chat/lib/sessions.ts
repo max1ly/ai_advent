@@ -1,4 +1,5 @@
 import { ChatAgent } from '@/lib/agent';
+import { saveMessage, getSessionMessages } from '@/lib/db';
 
 const sessions = new Map<string, ChatAgent>();
 
@@ -14,8 +15,28 @@ export function getOrCreateAgent(
     return { agent, sessionId };
   }
 
-  const newId = crypto.randomUUID();
-  const agent = new ChatAgent({ model });
-  sessions.set(newId, agent);
-  return { agent, sessionId: newId };
+  // New session or server restarted — check SQLite for existing messages
+  const sid = sessionId ?? crypto.randomUUID();
+  const rows = sessionId ? getSessionMessages(sessionId) : [];
+  const history = rows.map((r) => ({
+    role: r.role as 'user' | 'assistant',
+    content: r.content,
+  }));
+
+  const agent = new ChatAgent({
+    model,
+    history,
+    onMessagePersist: (role, content) => {
+      saveMessage(sid, role, content, model);
+    },
+  });
+
+  if (history.length > 0) {
+    console.log(
+      `\x1b[36m[Sessions]\x1b[0m Restored ${history.length} messages for session ${sid.slice(0, 8)}…`,
+    );
+  }
+
+  sessions.set(sid, agent);
+  return { agent, sessionId: sid };
 }
