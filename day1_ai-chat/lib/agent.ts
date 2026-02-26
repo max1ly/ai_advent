@@ -5,20 +5,56 @@ import { MODELS, type ModelConfig } from '@/lib/models';
 
 type Message = { role: 'user' | 'assistant'; content: string };
 
+export interface ChatFile {
+  filename: string;
+  mediaType: string;
+  data: string; // base64
+}
+
+export interface SessionMetrics {
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalTokens: number;
+  totalCost: number;
+  exchanges: number;
+  contextWindow: number;
+}
+
 const DEFAULT_SYSTEM_PROMPT =
   'You must ALWAYS respond in English. Never use Chinese. If input is English, output must be English only.';
+
+const TEXT_TYPES = new Set([
+  'text/plain', 'text/csv', 'text/html', 'text/css', 'text/javascript',
+  'application/json', 'application/xml', 'text/xml', 'text/markdown',
+]);
+
+function isTextFile(mediaType: string): boolean {
+  return TEXT_TYPES.has(mediaType) || mediaType.startsWith('text/');
+}
+
+function extractTextFromFiles(files: ChatFile[]): string {
+  const parts: string[] = [];
+  for (const file of files) {
+    if (isTextFile(file.mediaType)) {
+      const text = Buffer.from(file.data, 'base64').toString('utf-8');
+      parts.push(`[File: ${file.filename}]\n${text}`);
+    }
+  }
+  return parts.join('\n\n');
+}
 
 export class ChatAgent {
   private history: Message[] = [];
   private modelConfig: ModelConfig;
   private systemPrompt: string;
-  private onMessagePersist?: (role: string, content: string) => void;
+  private onMessagePersist?: (role: string, content: string, files?: ChatFile[]) => void;
+  private sessionMetrics: SessionMetrics;
 
   constructor(opts?: {
     model?: string;
     systemPrompt?: string;
     history?: Message[];
-    onMessagePersist?: (role: string, content: string) => void;
+    onMessagePersist?: (role: string, content: string, files?: ChatFile[]) => void;
   }) {
     this.modelConfig =
       MODELS.find((m) => m.id === opts?.model) ?? MODELS[1];
@@ -27,11 +63,28 @@ export class ChatAgent {
       this.history = opts.history;
     }
     this.onMessagePersist = opts?.onMessagePersist;
+    this.sessionMetrics = {
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalTokens: 0,
+      totalCost: 0,
+      exchanges: 0,
+      contextWindow: this.modelConfig.contextWindow,
+    };
   }
 
-  chat(userMessage: string) {
-    this.history.push({ role: 'user', content: userMessage });
-    this.onMessagePersist?.('user', userMessage);
+  chat(userMessage: string, files?: ChatFile[]) {
+    // Build the full message with extracted file text
+    let fullMessage = userMessage;
+    if (files?.length) {
+      const extracted = extractTextFromFiles(files);
+      if (extracted) {
+        fullMessage = `${userMessage}\n\n${extracted}`;
+      }
+    }
+
+    this.history.push({ role: 'user', content: fullMessage });
+    this.onMessagePersist?.('user', userMessage, files);
 
     const { modelConfig, systemPrompt, history } = this;
     const modelInstance =
@@ -67,6 +120,13 @@ export class ChatAgent {
               (inputTokens / 1_000_000) * modelConfig.pricing.input +
               (outputTokens / 1_000_000) * modelConfig.pricing.output;
 
+            this.sessionMetrics.totalInputTokens += inputTokens;
+            this.sessionMetrics.totalOutputTokens += outputTokens;
+            this.sessionMetrics.totalTokens += inputTokens + outputTokens;
+            this.sessionMetrics.totalCost += cost;
+            this.sessionMetrics.exchanges += 1;
+            this.sessionMetrics.contextWindow = modelConfig.contextWindow;
+
             console.log(`\x1b[32m[Agent]\x1b[0m Response complete:
   Time:     ${elapsed}ms
   Tokens:   ${totalTokens} (${inputTokens} in + ${outputTokens} out)
@@ -83,6 +143,7 @@ export class ChatAgent {
                 cost,
                 model: modelConfig.id,
                 tier: modelConfig.tier,
+                session: { ...this.sessionMetrics },
               },
             });
           },
@@ -103,6 +164,7 @@ export class ChatAgent {
     const config = MODELS.find((m) => m.id === modelId);
     if (config) {
       this.modelConfig = config;
+      this.sessionMetrics.contextWindow = config.contextWindow;
     }
   }
 }

@@ -30,6 +30,7 @@ export default function ChatContainer({ messages, status }: ChatContainerProps) 
   return (
     <div
       ref={containerRef}
+      data-chat-container
       className="flex-1 space-y-4 overflow-y-auto px-4 py-4"
     >
       {messages.length === 0 ? (

@@ -1,5 +1,6 @@
 import { ChatAgent } from '@/lib/agent';
-import { saveMessage, getSessionMessages } from '@/lib/db';
+import { saveMessage, getSessionMessages, saveFile } from '@/lib/db';
+import type { ChatFile } from '@/lib/agent';
 
 const sessions = new Map<string, ChatAgent>();
 
@@ -15,7 +16,6 @@ export function getOrCreateAgent(
     return { agent, sessionId };
   }
 
-  // New session or server restarted — check SQLite for existing messages
   const sid = sessionId ?? crypto.randomUUID();
   const rows = sessionId ? getSessionMessages(sessionId) : [];
   const history = rows.map((r) => ({
@@ -26,8 +26,14 @@ export function getOrCreateAgent(
   const agent = new ChatAgent({
     model,
     history,
-    onMessagePersist: (role, content) => {
-      saveMessage(sid, role, content, model);
+    onMessagePersist: (role: string, content: string, files?: ChatFile[]) => {
+      const messageId = saveMessage(sid, role, content, model);
+      if (files?.length) {
+        for (const file of files) {
+          const data = Buffer.from(file.data, 'base64');
+          saveFile(messageId, sid, file.filename, file.mediaType, data);
+        }
+      }
     },
   });
 
