@@ -7,7 +7,7 @@ import type { PendingFile } from './components/ChatInput';
 import ErrorMessage from './components/ErrorMessage';
 import ModelSelector from './components/ModelSelector';
 import MetricsDisplay from './components/MetricsDisplay';
-import type { Metrics } from './components/MetricsDisplay';
+import type { Metrics, CompressionSettings } from '@/lib/types';
 import type { DisplayMessage, FileAttachment } from '@/lib/types';
 import { DEFAULT_MODEL } from '@/lib/models';
 
@@ -30,6 +30,15 @@ export default function Home() {
       return localStorage.getItem('chat-model') || DEFAULT_MODEL;
     }
     return DEFAULT_MODEL;
+  });
+  const [compression, setCompression] = useState<CompressionSettings>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('chat-compression');
+      if (saved) {
+        try { return JSON.parse(saved); } catch { /* ignore */ }
+      }
+    }
+    return { enabled: false, recentWindowSize: 6, summaryBatchSize: 10 };
   });
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
@@ -84,6 +93,11 @@ export default function Home() {
   const handleModelChange = useCallback((modelId: string) => {
     setModel(modelId);
     localStorage.setItem('chat-model', modelId);
+  }, []);
+
+  const handleCompressionChange = useCallback((settings: CompressionSettings) => {
+    setCompression(settings);
+    localStorage.setItem('chat-compression', JSON.stringify(settings));
   }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -166,6 +180,9 @@ export default function Home() {
             sessionId: sessionIdRef.current,
             model,
             files: filesPayload.length > 0 ? filesPayload : undefined,
+            compressionEnabled: compression.enabled,
+            recentWindowSize: compression.recentWindowSize,
+            summaryBatchSize: compression.summaryBatchSize,
           }),
         });
 
@@ -229,7 +246,7 @@ export default function Home() {
         setStatus('ready');
       }
     },
-    [input, model, status, pendingFiles],
+    [input, model, status, pendingFiles, compression],
   );
 
   const handleRetry = useCallback(() => {
@@ -250,7 +267,11 @@ export default function Home() {
           <h1 className="text-xl font-medium tracking-tight text-gray-800">Chat MAX</h1>
           <ModelSelector value={model} onChange={handleModelChange} />
         </div>
-        <MetricsDisplay metrics={metrics} />
+        <MetricsDisplay
+          metrics={metrics}
+          compression={compression}
+          onCompressionChange={handleCompressionChange}
+        />
       </header>
 
       {/* Messages area */}

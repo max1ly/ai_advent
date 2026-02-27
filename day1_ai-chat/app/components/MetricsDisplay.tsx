@@ -1,107 +1,112 @@
 'use client';
 
-export interface SessionMetrics {
-  totalInputTokens: number;
-  totalOutputTokens: number;
-  totalTokens: number;
-  totalCost: number;
-  exchanges: number;
-  contextWindow: number;
-}
-
-export interface Metrics {
-  responseTime: number;
-  inputTokens: number;
-  outputTokens: number;
-  totalTokens: number;
-  cost: number;
-  model: string;
-  tier: string;
-  session?: SessionMetrics;
-}
+import type { Metrics, CompressionSettings } from '@/lib/types';
 
 interface MetricsDisplayProps {
   metrics: Metrics | null;
+  compression: CompressionSettings;
+  onCompressionChange: (settings: CompressionSettings) => void;
 }
 
-function formatTime(ms: number): string {
-  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
-}
-
-function formatCost(cost: number): string {
-  if (cost === 0) return 'Free';
-  return `$${cost.toFixed(6)}`;
-}
-
-function contextColor(pct: number): string {
-  if (pct >= 95) return 'text-red-600';
-  if (pct >= 80) return 'text-yellow-600';
-  return 'text-green-600';
-}
-
-function barColor(pct: number): string {
-  if (pct >= 95) return 'bg-red-500';
-  if (pct >= 80) return 'bg-yellow-500';
-  return 'bg-green-500';
-}
-
-export default function MetricsDisplay({ metrics }: MetricsDisplayProps) {
-  if (!metrics) {
-    return (
-      <div className="flex items-center gap-4 text-sm text-gray-400">
-        <span>Time: —</span>
-        <span>Tokens: —</span>
-        <span>Cost: —</span>
-      </div>
-    );
-  }
-
-  const session = metrics.session;
-  const contextPct = session
-    ? Math.round((session.totalInputTokens / session.contextWindow) * 100)
-    : 0;
-
+export default function MetricsDisplay({
+  metrics,
+  compression,
+  onCompressionChange,
+}: MetricsDisplayProps) {
   return (
     <div className="space-y-2">
-      {/* Per-message metrics */}
+      {/* Compression controls */}
       <div className="flex items-center gap-4 text-sm">
-        <span className="text-gray-600">
-          Time: <span className="font-medium text-gray-800">{formatTime(metrics.responseTime)}</span>
-        </span>
-        <span className="text-gray-600">
-          Tokens: <span className="font-medium text-gray-800">{metrics.totalTokens}</span>
-          <span className="text-gray-400 text-xs ml-1">({metrics.inputTokens}↑ {metrics.outputTokens}↓)</span>
-        </span>
-        <span className="text-gray-600">
-          Cost: <span className="font-medium text-gray-800">{formatCost(metrics.cost)}</span>
-        </span>
-      </div>
-
-      {/* Session totals */}
-      {session && (
-        <div className="flex items-center gap-4 text-sm border-t border-gray-100 pt-2">
-          <span className="text-gray-500">
-            Session: <span className="font-medium text-gray-700">{session.exchanges} exchanges</span>
-          </span>
-          <span className="text-gray-500">
-            Total: <span className="font-medium text-gray-700">{session.totalTokens.toLocaleString()}</span>
-            <span className="text-gray-400 text-xs ml-1">({session.totalInputTokens.toLocaleString()}↑ {session.totalOutputTokens.toLocaleString()}↓)</span>
-          </span>
-          <span className="text-gray-500">
-            Cost: <span className="font-medium text-gray-700">{formatCost(session.totalCost)}</span>
-          </span>
-          <span className={`font-medium ${contextColor(contextPct)}`}>
-            Context: {contextPct}%
-          </span>
-          {/* Mini progress bar */}
-          <div className="w-20 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <div
+            role="switch"
+            aria-checked={compression.enabled}
+            tabIndex={0}
+            className={`relative w-9 h-5 rounded-full transition-colors ${
+              compression.enabled ? 'bg-blue-500' : 'bg-gray-300'
+            }`}
+            onClick={() =>
+              onCompressionChange({ ...compression, enabled: !compression.enabled })
+            }
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onCompressionChange({ ...compression, enabled: !compression.enabled });
+              }
+            }}
+          >
             <div
-              className={`h-full rounded-full transition-all ${barColor(contextPct)}`}
-              style={{ width: `${Math.min(contextPct, 100)}%` }}
+              className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                compression.enabled ? 'translate-x-4' : ''
+              }`}
             />
           </div>
-        </div>
-      )}
+          <span className="text-gray-600">Summarization</span>
+        </label>
+
+        <label className="flex items-center gap-1 text-gray-600">
+          Recent:
+          <input
+            type="number"
+            min={2}
+            max={20}
+            value={compression.recentWindowSize}
+            disabled={!compression.enabled}
+            onChange={(e) =>
+              onCompressionChange({
+                ...compression,
+                recentWindowSize: Math.max(2, parseInt(e.target.value) || 6),
+              })
+            }
+            className="w-12 px-1 py-0.5 text-center border border-gray-300 rounded text-sm disabled:opacity-40 disabled:bg-gray-100"
+          />
+        </label>
+
+        <label className="flex items-center gap-1 text-gray-600">
+          Batch:
+          <input
+            type="number"
+            min={4}
+            max={30}
+            value={compression.summaryBatchSize}
+            disabled={!compression.enabled}
+            onChange={(e) =>
+              onCompressionChange({
+                ...compression,
+                summaryBatchSize: Math.max(4, parseInt(e.target.value) || 10),
+              })
+            }
+            className="w-12 px-1 py-0.5 text-center border border-gray-300 rounded text-sm disabled:opacity-40 disabled:bg-gray-100"
+          />
+        </label>
+
+        <span className="text-gray-300">|</span>
+
+        {/* Token display */}
+        {metrics ? (
+          <>
+            <span className="text-gray-600">
+              Last:{' '}
+              <span className="font-medium text-gray-800">
+                {metrics.lastRequest.inputTokens}in/{metrics.lastRequest.outputTokens}out
+              </span>
+            </span>
+            <span className="text-gray-600">
+              Total:{' '}
+              <span className="font-medium text-gray-800">
+                {metrics.session.totalTokens.toLocaleString()}
+              </span>
+            </span>
+            {metrics.session.totalSummarizationTokens > 0 && (
+              <span className="text-amber-600 text-xs">
+                (summary: {metrics.session.totalSummarizationTokens.toLocaleString()})
+              </span>
+            )}
+          </>
+        ) : (
+          <span className="text-gray-400">Tokens: —</span>
+        )}
+      </div>
     </div>
   );
 }

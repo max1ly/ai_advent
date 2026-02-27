@@ -1,17 +1,22 @@
 import { ChatAgent } from '@/lib/agent';
 import { saveMessage, getSessionMessages, saveFile } from '@/lib/db';
 import type { ChatFile } from '@/lib/agent';
+import type { CompressionSettings } from '@/lib/types';
 
 const sessions = new Map<string, ChatAgent>();
 
 export function getOrCreateAgent(
   sessionId: string | null,
   model?: string,
+  compression?: CompressionSettings,
 ): { agent: ChatAgent; sessionId: string } {
   if (sessionId && sessions.has(sessionId)) {
     const agent = sessions.get(sessionId)!;
     if (model) {
       agent.setModel(model);
+    }
+    if (compression) {
+      agent.setCompression(compression);
     }
     return { agent, sessionId };
   }
@@ -26,6 +31,7 @@ export function getOrCreateAgent(
   const agent = new ChatAgent({
     model,
     history,
+    compression,
     onMessagePersist: (role: string, content: string, files?: ChatFile[]) => {
       const messageId = saveMessage(sid, role, content, model);
       if (files?.length) {

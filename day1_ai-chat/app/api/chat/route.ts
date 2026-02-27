@@ -2,9 +2,15 @@ import { createUIMessageStreamResponse, createUIMessageStream } from 'ai';
 import { getOrCreateAgent } from '@/lib/sessions';
 
 export async function POST(req: Request) {
-  const { message, sessionId, model, files } = await req.json();
+  const { message, sessionId, model, files, compressionEnabled, recentWindowSize, summaryBatchSize } = await req.json();
 
-  const { agent, sessionId: sid } = getOrCreateAgent(sessionId, model);
+  const compression = {
+    enabled: compressionEnabled ?? false,
+    recentWindowSize: recentWindowSize ?? 6,
+    summaryBatchSize: summaryBatchSize ?? 10,
+  };
+
+  const { agent, sessionId: sid } = getOrCreateAgent(sessionId, model, compression);
 
   try {
     const stream = agent.chat(message, files);
