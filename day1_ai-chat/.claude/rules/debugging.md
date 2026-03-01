@@ -15,9 +15,17 @@ All debugging tools (server start, tests, port management, Docker, browser DevTo
 2. **Investigate** — read source code, trace data/control flow, add `[Module]` prefixed `console.log` if needed
 3. **Diagnose** — identify exact root cause before proposing any fix
 4. **Compare approaches** — for non-trivial issues, evaluate 2-3 options for security, prod-readiness, project patterns, simplicity
-5. **Fix** — apply chosen approach with production-ready quality
-6. **Validate** — run `pnpm vitest run` from project root AND check browser at `http://localhost:3030`
-7. **Iterate** — if validation fails, restart services and return to step 2
+5. **Fix** — apply the chosen approach using the appropriate engineering rule:
+   - Backend changes → follow `@.claude/rules/backend-engineer.md` (production standards, error handling, mandatory checkpoints)
+   - Frontend changes → follow `@.claude/rules/frontend-engineer.md` (all UI states, accessibility, perceived performance)
+   - Mixed changes → follow both rules for their respective areas
+6. **Test** — write tests per `@.claude/rules/testing.md`:
+   - Bug fixes require a test that reproduces the bug + verifies the fix
+   - Run `pnpm vitest run` from project root
+7. **Validate** — run QA per `@.claude/rules/qa.md`:
+   - Verify the fix in browser at `http://localhost:3030`
+   - Targeted validation of the specific change + quick smoke pass on core flows
+8. **Iterate** — if validation fails, restart services and return to step 2
 
 ## Service Management
 

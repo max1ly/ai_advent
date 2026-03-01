@@ -12,26 +12,32 @@ export interface DisplayMessage {
   files?: FileAttachment[];
 }
 
-export interface CompressionSettings {
-  enabled: boolean;
-  recentWindowSize: number;
-  summaryBatchSize: number;
+export type StrategyType = 'sliding-window' | 'facts' | 'branching';
+
+export interface StrategySettings {
+  type: StrategyType;
+  windowSize: number;
+}
+
+export interface Branch {
+  id: string;
+  name: string;
+  messages: { role: 'user' | 'assistant'; content: string }[];
 }
 
 export interface LastRequestMetrics {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
-  summarizationTokens: number;
+  strategyTokens: number;
 }
 
 export interface SessionMetrics {
   totalInputTokens: number;
   totalOutputTokens: number;
   totalTokens: number;
-  totalSummarizationTokens: number;
+  totalStrategyTokens: number;
   exchanges: number;
-  summariesGenerated: number;
 }
 
 export interface Metrics {

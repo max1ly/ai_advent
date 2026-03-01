@@ -77,20 +77,8 @@ export default function ChatMessage({ message }: ChatMessageProps) {
     );
   }
 
-  // Show loading dots if assistant message has no visible text yet
-  if (!content) {
-    return (
-      <div className="flex justify-start">
-        <div className="rounded-2xl rounded-bl-md bg-white shadow-sm border border-gray-100 px-5 py-3">
-          <div className="flex items-center gap-1">
-            <span className="animate-bounce-dots h-2 w-2 rounded-full bg-gray-400" />
-            <span className="animate-bounce-dots animation-delay-200 h-2 w-2 rounded-full bg-gray-400" />
-            <span className="animate-bounce-dots animation-delay-400 h-2 w-2 rounded-full bg-gray-400" />
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Empty assistant message — loading dots handled by ChatContainer
+  if (!content) return null;
 
   // Assistant message with markdown rendering
   const components: Components = {
@@ -98,7 +86,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
       if (inline) {
         return (
           <code
-            className="rounded bg-gray-100 px-1 py-0.5"
+            className="rounded bg-gray-800 text-gray-100 px-1.5 py-0.5 text-sm"
             {...props}
           >
             {children}
@@ -106,8 +94,8 @@ export default function ChatMessage({ message }: ChatMessageProps) {
         );
       }
       return (
-        <pre className="overflow-x-auto rounded-lg bg-gray-100 p-4">
-          <code className={className} {...props}>
+        <pre className="overflow-x-auto rounded-lg bg-gray-900 p-4">
+          <code className={`text-gray-100 text-sm ${className ?? ''}`} {...props}>
             {children}
           </code>
         </pre>

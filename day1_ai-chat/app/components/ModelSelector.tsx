@@ -10,9 +10,6 @@ interface ModelSelectorProps {
 export default function ModelSelector({ value, onChange }: ModelSelectorProps) {
   return (
     <div className="flex items-center gap-2">
-      <label htmlFor="model-select" className="text-sm text-gray-500 whitespace-nowrap">
-        Model:
-      </label>
       <select
         id="model-select"
         value={value}

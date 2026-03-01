@@ -81,3 +81,7 @@ These were made deliberately — do not change without discussion:
 
 - `.planning/` — Project scope, requirements (REQUIREMENTS.md), roadmap (ROADMAP.md), current state (STATE.md)
 - `.claude/rules/debugging.md` — Debugging workflow, service management, validation steps
+- `.claude/rules/testing.md` — Testing mandate, Vitest/Playwright patterns, anti-patterns
+- `.claude/rules/backend-engineer.md` — Backend engineer subagent role, mandatory checkpoints, implementation standards
+- `.claude/rules/frontend-engineer.md` — Frontend engineer subagent role, UI/UX standards, accessibility requirements
+- `.claude/rules/qa.md` — QA validation subagent role, evidence-based testing, smoke test procedures

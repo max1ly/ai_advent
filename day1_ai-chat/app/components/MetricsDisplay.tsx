@@ -1,112 +1,122 @@
 'use client';
 
-import type { Metrics, CompressionSettings } from '@/lib/types';
+import type { Metrics, StrategyType, Branch } from '@/lib/types';
 
 interface MetricsDisplayProps {
   metrics: Metrics | null;
-  compression: CompressionSettings;
-  onCompressionChange: (settings: CompressionSettings) => void;
+  strategy: StrategyType;
+  windowSize: number;
+  branches: Branch[];
+  activeBranchId: string | null;
+  onStrategyChange: (type: StrategyType) => void;
+  onWindowSizeChange: (size: number) => void;
+  onNewChat: () => void;
+  onCheckpoint: () => void;
+  onSwitchBranch: (branchId: string) => void;
 }
 
 export default function MetricsDisplay({
   metrics,
-  compression,
-  onCompressionChange,
+  strategy,
+  windowSize,
+  branches,
+  activeBranchId,
+  onStrategyChange,
+  onWindowSizeChange,
+  onNewChat,
+  onCheckpoint,
+  onSwitchBranch,
 }: MetricsDisplayProps) {
   return (
-    <div className="space-y-2">
-      {/* Compression controls */}
-      <div className="flex items-center gap-4 text-sm">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <div
-            role="switch"
-            aria-checked={compression.enabled}
-            tabIndex={0}
-            className={`relative w-9 h-5 rounded-full transition-colors ${
-              compression.enabled ? 'bg-blue-500' : 'bg-gray-300'
-            }`}
-            onClick={() =>
-              onCompressionChange({ ...compression, enabled: !compression.enabled })
-            }
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                onCompressionChange({ ...compression, enabled: !compression.enabled });
-              }
-            }}
-          >
-            <div
-              className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                compression.enabled ? 'translate-x-4' : ''
-              }`}
-            />
-          </div>
-          <span className="text-gray-600">Summarization</span>
-        </label>
+    <div className="flex items-center gap-3 text-sm flex-wrap">
+      {/* Strategy selector */}
+      <select
+        value={strategy}
+        onChange={(e) => onStrategyChange(e.target.value as StrategyType)}
+        className="px-2 py-1 border border-gray-300 rounded text-sm bg-white"
+      >
+        <option value="sliding-window">Sliding Window</option>
+        <option value="facts">Sticky Facts</option>
+        <option value="branching">Branching</option>
+      </select>
 
+      {/* Window size — hidden for branching */}
+      {strategy !== 'branching' && (
         <label className="flex items-center gap-1 text-gray-600">
-          Recent:
+          Window:
           <input
             type="number"
             min={2}
-            max={20}
-            value={compression.recentWindowSize}
-            disabled={!compression.enabled}
-            onChange={(e) =>
-              onCompressionChange({
-                ...compression,
-                recentWindowSize: Math.max(2, parseInt(e.target.value) || 6),
-              })
-            }
-            className="w-12 px-1 py-0.5 text-center border border-gray-300 rounded text-sm disabled:opacity-40 disabled:bg-gray-100"
-          />
-        </label>
-
-        <label className="flex items-center gap-1 text-gray-600">
-          Batch:
-          <input
-            type="number"
-            min={4}
             max={30}
-            value={compression.summaryBatchSize}
-            disabled={!compression.enabled}
-            onChange={(e) =>
-              onCompressionChange({
-                ...compression,
-                summaryBatchSize: Math.max(4, parseInt(e.target.value) || 10),
-              })
-            }
-            className="w-12 px-1 py-0.5 text-center border border-gray-300 rounded text-sm disabled:opacity-40 disabled:bg-gray-100"
+            value={windowSize}
+            onChange={(e) => onWindowSizeChange(Math.max(2, parseInt(e.target.value) || 10))}
+            className="w-12 px-1 py-0.5 text-center border border-gray-300 rounded text-sm"
           />
         </label>
+      )}
 
-        <span className="text-gray-300">|</span>
+      {/* Branching controls */}
+      {strategy === 'branching' && (
+        <>
+          <button
+            onClick={onCheckpoint}
+            className="px-2 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded text-sm hover:bg-indigo-100"
+          >
+            Checkpoint
+          </button>
+          {branches.length > 0 && (
+            <select
+              value={activeBranchId ?? ''}
+              onChange={(e) => onSwitchBranch(e.target.value)}
+              className="px-2 py-1 border border-gray-300 rounded text-sm bg-white"
+            >
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </>
+      )}
 
-        {/* Token display */}
-        {metrics ? (
-          <>
-            <span className="text-gray-600">
-              Last:{' '}
-              <span className="font-medium text-gray-800">
-                {metrics.lastRequest.inputTokens}in/{metrics.lastRequest.outputTokens}out
-              </span>
+      <span className="text-gray-300">|</span>
+
+      {/* Token display */}
+      {metrics ? (
+        <>
+          <span className="text-gray-600">
+            Last:{' '}
+            <span className="font-medium text-gray-800">
+              {metrics.lastRequest.inputTokens}in/{metrics.lastRequest.outputTokens}out
             </span>
-            <span className="text-gray-600">
-              Total:{' '}
-              <span className="font-medium text-gray-800">
-                {metrics.session.totalTokens.toLocaleString()}
-              </span>
+          </span>
+          <span className="text-gray-600">
+            Total:{' '}
+            <span className="font-medium text-gray-800">
+              {metrics.session.totalTokens.toLocaleString()}
             </span>
-            {metrics.session.totalSummarizationTokens > 0 && (
-              <span className="text-amber-600 text-xs">
-                (summary: {metrics.session.totalSummarizationTokens.toLocaleString()})
-              </span>
-            )}
-          </>
-        ) : (
-          <span className="text-gray-400">Tokens: —</span>
-        )}
-      </div>
+          </span>
+          {metrics.session.totalStrategyTokens > 0 && (
+            <span className="text-amber-600 text-xs">
+              (strategy: {metrics.session.totalStrategyTokens.toLocaleString()})
+            </span>
+          )}
+        </>
+      ) : (
+        <span className="text-gray-400">Tokens: —</span>
+      )}
+
+      {/* Spacer pushes New Chat to the right */}
+      <div className="flex-1" />
+
+      {/* New Chat button */}
+      <button
+        onClick={onNewChat}
+        className="px-3 py-1 rounded text-sm text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:scale-105 active:scale-95 transition-all"
+      >
+        New Chat
+      </button>
     </div>
   );
 }

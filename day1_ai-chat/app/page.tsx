@@ -7,7 +7,7 @@ import type { PendingFile } from './components/ChatInput';
 import ErrorMessage from './components/ErrorMessage';
 import ModelSelector from './components/ModelSelector';
 import MetricsDisplay from './components/MetricsDisplay';
-import type { Metrics, CompressionSettings } from '@/lib/types';
+import type { Metrics, StrategyType, Branch } from '@/lib/types';
 import type { DisplayMessage, FileAttachment } from '@/lib/types';
 import { DEFAULT_MODEL } from '@/lib/models';
 
@@ -25,21 +25,11 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 export default function Home() {
-  const [model, setModel] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('chat-model') || DEFAULT_MODEL;
-    }
-    return DEFAULT_MODEL;
-  });
-  const [compression, setCompression] = useState<CompressionSettings>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('chat-compression');
-      if (saved) {
-        try { return JSON.parse(saved); } catch { /* ignore */ }
-      }
-    }
-    return { enabled: false, recentWindowSize: 6, summaryBatchSize: 10 };
-  });
+  const [model, setModel] = useState(DEFAULT_MODEL);
+  const [strategy, setStrategy] = useState<StrategyType>('sliding-window');
+  const [windowSize, setWindowSize] = useState(10);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [activeBranchId, setActiveBranchId] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [status, setStatus] = useState<'ready' | 'submitted' | 'streaming'>('ready');
@@ -49,6 +39,16 @@ export default function Home() {
   const sessionIdRef = useRef<string | null>(null);
   const msgCounterRef = useRef(0);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Hydrate from localStorage after mount to avoid SSR/client mismatch
+  useEffect(() => {
+    const savedModel = localStorage.getItem('chat-model');
+    if (savedModel) setModel(savedModel);
+    const savedStrategy = localStorage.getItem('chat-strategy') as StrategyType | null;
+    if (savedStrategy) setStrategy(savedStrategy);
+    const savedWindowSize = localStorage.getItem('chat-window-size');
+    if (savedWindowSize) setWindowSize(parseInt(savedWindowSize) || 10);
+  }, []);
 
   useEffect(() => {
     const savedSessionId = localStorage.getItem('chat-session-id');
@@ -95,9 +95,83 @@ export default function Home() {
     localStorage.setItem('chat-model', modelId);
   }, []);
 
-  const handleCompressionChange = useCallback((settings: CompressionSettings) => {
-    setCompression(settings);
-    localStorage.setItem('chat-compression', JSON.stringify(settings));
+  const handleStrategyChange = useCallback((type: StrategyType) => {
+    setStrategy(type);
+    localStorage.setItem('chat-strategy', type);
+  }, []);
+
+  const handleWindowSizeChange = useCallback((size: number) => {
+    setWindowSize(size);
+    localStorage.setItem('chat-window-size', String(size));
+  }, []);
+
+  const handleNewChat = useCallback(async () => {
+    if (sessionIdRef.current) {
+      await fetch('/api/chat/actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: sessionIdRef.current, action: 'new-chat' }),
+      });
+    }
+    sessionIdRef.current = null;
+    localStorage.removeItem('chat-session-id');
+    setMessages([]);
+    setMetrics(null);
+    setError(null);
+    setBranches([]);
+    setActiveBranchId(null);
+  }, []);
+
+  const handleCheckpoint = useCallback(async () => {
+    if (!sessionIdRef.current) {
+      console.warn('[Checkpoint] No session ID — send a message first');
+      return;
+    }
+    try {
+      const res = await fetch('/api/chat/actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: sessionIdRef.current, action: 'checkpoint' }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        console.error('[Checkpoint] Failed:', res.status, err);
+        return;
+      }
+      const data = await res.json();
+      setBranches(data.branches);
+      setActiveBranchId(data.branches[0]?.id ?? null);
+    } catch (err) {
+      console.error('[Checkpoint] Error:', err);
+    }
+  }, []);
+
+  const handleSwitchBranch = useCallback(async (branchId: string) => {
+    if (!sessionIdRef.current) return;
+    setActiveBranchId(branchId);
+    try {
+      const res = await fetch('/api/chat/actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: sessionIdRef.current, action: 'switch-branch', branchId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const displayMessages: DisplayMessage[] = data.messages.map(
+          (m: { role: string; content: string }, i: number) => ({
+            id: `branch-${i}`,
+            role: m.role as 'user' | 'assistant',
+            content: m.content,
+          }),
+        );
+        setMessages(displayMessages);
+        msgCounterRef.current = displayMessages.length;
+      } else {
+        console.error('[SwitchBranch] Failed:', res.status);
+      }
+    } catch (err) {
+      console.error('[SwitchBranch] Error:', err);
+    }
   }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -180,9 +254,8 @@ export default function Home() {
             sessionId: sessionIdRef.current,
             model,
             files: filesPayload.length > 0 ? filesPayload : undefined,
-            compressionEnabled: compression.enabled,
-            recentWindowSize: compression.recentWindowSize,
-            summaryBatchSize: compression.summaryBatchSize,
+            strategy,
+            windowSize,
           }),
         });
 
@@ -246,7 +319,7 @@ export default function Home() {
         setStatus('ready');
       }
     },
-    [input, model, status, pendingFiles, compression],
+    [input, model, status, pendingFiles, strategy, windowSize],
   );
 
   const handleRetry = useCallback(() => {
@@ -269,8 +342,15 @@ export default function Home() {
         </div>
         <MetricsDisplay
           metrics={metrics}
-          compression={compression}
-          onCompressionChange={handleCompressionChange}
+          strategy={strategy}
+          windowSize={windowSize}
+          branches={branches}
+          activeBranchId={activeBranchId}
+          onStrategyChange={handleStrategyChange}
+          onWindowSizeChange={handleWindowSizeChange}
+          onNewChat={handleNewChat}
+          onCheckpoint={handleCheckpoint}
+          onSwitchBranch={handleSwitchBranch}
         />
       </header>
 
