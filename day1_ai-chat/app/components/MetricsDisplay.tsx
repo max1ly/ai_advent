@@ -13,6 +13,7 @@ interface MetricsDisplayProps {
   onNewChat: () => void;
   onCheckpoint: () => void;
   onSwitchBranch: (branchId: string) => void;
+  onMemoryOpen: () => void;
 }
 
 export default function MetricsDisplay({
@@ -26,6 +27,7 @@ export default function MetricsDisplay({
   onNewChat,
   onCheckpoint,
   onSwitchBranch,
+  onMemoryOpen,
 }: MetricsDisplayProps) {
   return (
     <div className="flex items-center gap-3 text-sm flex-wrap">
@@ -109,6 +111,14 @@ export default function MetricsDisplay({
 
       {/* Spacer pushes New Chat to the right */}
       <div className="flex-1" />
+
+      {/* Memory button */}
+      <button
+        onClick={onMemoryOpen}
+        className="px-3 py-1 rounded text-sm text-white bg-gradient-to-r from-purple-600 to-pink-600 hover:scale-105 active:scale-95 transition-all"
+      >
+        Memory
+      </button>
 
       {/* New Chat button */}
       <button

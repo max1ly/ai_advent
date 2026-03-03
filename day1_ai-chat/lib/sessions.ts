@@ -30,6 +30,7 @@ export function getOrCreateAgent(
 
   const agent = new ChatAgent({
     model,
+    sessionId: sid,
     history,
     strategy,
     onMessagePersist: (role: string, content: string, files?: ChatFile[]) => {

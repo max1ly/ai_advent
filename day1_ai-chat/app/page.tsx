@@ -7,6 +7,7 @@ import type { PendingFile } from './components/ChatInput';
 import ErrorMessage from './components/ErrorMessage';
 import ModelSelector from './components/ModelSelector';
 import MetricsDisplay from './components/MetricsDisplay';
+import MemoryDialog from './components/MemoryDialog';
 import type { Metrics, StrategyType, Branch } from '@/lib/types';
 import type { DisplayMessage, FileAttachment } from '@/lib/types';
 import { DEFAULT_MODEL } from '@/lib/models';
@@ -39,6 +40,9 @@ export default function Home() {
   const sessionIdRef = useRef<string | null>(null);
   const msgCounterRef = useRef(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [isMemoryOpen, setIsMemoryOpen] = useState(false);
+
+  const handleMemoryOpen = useCallback(() => setIsMemoryOpen(true), []);
 
   // Hydrate from localStorage after mount to avoid SSR/client mismatch
   useEffect(() => {
@@ -351,6 +355,7 @@ export default function Home() {
           onNewChat={handleNewChat}
           onCheckpoint={handleCheckpoint}
           onSwitchBranch={handleSwitchBranch}
+          onMemoryOpen={handleMemoryOpen}
         />
       </header>
 
@@ -369,6 +374,13 @@ export default function Home() {
         pendingFiles={pendingFiles}
         onFilesSelected={handleFilesSelected}
         onFileRemove={handleFileRemove}
+      />
+
+      <MemoryDialog
+        isOpen={isMemoryOpen}
+        onClose={() => setIsMemoryOpen(false)}
+        sessionId={sessionIdRef.current}
+        stmInfo={{ messageCount: messages.length, strategy, windowSize }}
       />
     </div>
   );

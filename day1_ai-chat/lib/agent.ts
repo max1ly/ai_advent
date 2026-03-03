@@ -2,6 +2,7 @@ import { streamText, generateText, createUIMessageStream } from 'ai';
 import { deepseek } from '@/lib/deepseek';
 import { openrouter } from '@/lib/openrouter';
 import { MODELS, type ModelConfig } from '@/lib/models';
+import { memoryManager } from '@/lib/memory';
 import type { StrategySettings, StrategyType, SessionMetrics, LastRequestMetrics, Branch } from '@/lib/types';
 
 type Message = { role: 'user' | 'assistant'; content: string };
@@ -42,6 +43,7 @@ export class ChatAgent {
   private history: Message[] = [];
   private modelConfig: ModelConfig;
   private systemPrompt: string;
+  private sessionId: string;
   private onMessagePersist?: (role: string, content: string, files?: ChatFile[]) => void;
   private sessionMetrics: SessionMetrics;
   private strategy: StrategyType = 'sliding-window';
@@ -54,12 +56,14 @@ export class ChatAgent {
   constructor(opts?: {
     model?: string;
     systemPrompt?: string;
+    sessionId?: string;
     history?: Message[];
     onMessagePersist?: (role: string, content: string, files?: ChatFile[]) => void;
     strategy?: StrategySettings;
   }) {
     this.modelConfig = MODELS.find((m) => m.id === opts?.model) ?? MODELS[1];
     this.systemPrompt = opts?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
+    this.sessionId = opts?.sessionId ?? '';
     if (opts?.history) {
       this.history = opts.history;
     }
@@ -107,6 +111,14 @@ export class ChatAgent {
 
         const messages = this.buildMessages();
 
+        // Inject memory layers into system prompt
+        const memorySection = this.sessionId
+          ? memoryManager.buildSystemPromptSection(this.sessionId)
+          : '';
+        const fullSystemPrompt = memorySection
+          ? `${systemPrompt}\n\n${memorySection}`
+          : systemPrompt;
+
         console.log(`
 \x1b[36m[Agent]\x1b[0m ─────────────────────────
   Model:          ${modelConfig.id} (${modelConfig.tier})
@@ -114,12 +126,13 @@ export class ChatAgent {
   History:        ${this.getActiveHistory().length} messages
   Strategy:       ${this.strategy} (window: ${this.windowSize})
   Facts:          ${Object.keys(this.facts).length} keys
+  Memory:         ${memorySection ? 'injected' : 'empty'}
   Branches:       ${this.branches.length}
 ────────────────────────────────────`);
 
         const result = streamText({
           model: modelInstance,
-          system: systemPrompt,
+          system: fullSystemPrompt,
           messages,
           onFinish: ({ text, usage }) => {
             this.getActiveHistory().push({ role: 'assistant', content: text });
@@ -154,6 +167,12 @@ export class ChatAgent {
                 session: { ...this.sessionMetrics },
               },
             });
+
+            // Fire-and-forget: extract memories without blocking the response
+            if (this.sessionId) {
+              memoryManager.extractMemory(fullMessage, text, this.sessionId, modelInstance)
+                .catch((err) => console.log('\x1b[33m[Memory]\x1b[0m Extraction failed:', err.message));
+            }
           },
         });
 

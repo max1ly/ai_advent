@@ -41,6 +41,38 @@ function createDatabase(): Database.Database {
     );
     CREATE INDEX IF NOT EXISTS idx_files_session ON files(session_id);
     CREATE INDEX IF NOT EXISTS idx_files_message ON files(message_id);
+
+    CREATE TABLE IF NOT EXISTS working_memory (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT NOT NULL UNIQUE,
+      task_description TEXT NOT NULL DEFAULT '',
+      progress TEXT NOT NULL DEFAULT '',
+      hypotheses TEXT NOT NULL DEFAULT '',
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS memory_profile (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      key TEXT UNIQUE NOT NULL,
+      value TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS memory_solutions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task TEXT NOT NULL,
+      steps TEXT NOT NULL,
+      outcome TEXT NOT NULL DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS memory_knowledge (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      fact TEXT UNIQUE NOT NULL,
+      source TEXT NOT NULL DEFAULT 'conversation',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
   `);
 
   console.log('\x1b[36m[DB]\x1b[0m SQLite initialized (WAL mode)');
@@ -117,4 +149,93 @@ export function getSessionMessagesWithFiles(
     ...m,
     files: getMessageFiles(m.id),
   }));
+}
+
+// --- Working Memory ---
+
+export function getWorkingMemory(
+  sessionId: string,
+): { id: number; session_id: string; task_description: string; progress: string; hypotheses: string; updated_at: string } | null {
+  const row = db.prepare(
+    'SELECT id, session_id, task_description, progress, hypotheses, updated_at FROM working_memory WHERE session_id = ?',
+  ).get(sessionId) as { id: number; session_id: string; task_description: string; progress: string; hypotheses: string; updated_at: string } | undefined;
+  return row ?? null;
+}
+
+export function saveWorkingMemory(
+  sessionId: string,
+  taskDescription: string,
+  progress: string,
+  hypotheses: string,
+): void {
+  db.prepare(
+    'INSERT INTO working_memory (session_id, task_description, progress, hypotheses) VALUES (?, ?, ?, ?) ON CONFLICT(session_id) DO UPDATE SET task_description = ?, progress = ?, hypotheses = ?, updated_at = datetime(\'now\')',
+  ).run(sessionId, taskDescription, progress, hypotheses, taskDescription, progress, hypotheses);
+}
+
+export function clearWorkingMemory(sessionId: string): void {
+  db.prepare('DELETE FROM working_memory WHERE session_id = ?').run(sessionId);
+}
+
+// --- Profile (LTM) ---
+
+export function getProfile(): { id: number; key: string; value: string; created_at: string; updated_at: string }[] {
+  return db.prepare(
+    'SELECT id, key, value, created_at, updated_at FROM memory_profile ORDER BY key',
+  ).all() as { id: number; key: string; value: string; created_at: string; updated_at: string }[];
+}
+
+export function saveProfileEntry(key: string, value: string): void {
+  db.prepare(
+    'INSERT INTO memory_profile (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = datetime(\'now\')',
+  ).run(key, value, value);
+}
+
+export function deleteProfileEntry(key: string): void {
+  db.prepare('DELETE FROM memory_profile WHERE key = ?').run(key);
+}
+
+// --- Solutions (LTM) ---
+
+export function getSolutions(): { id: number; task: string; steps: string; outcome: string; created_at: string }[] {
+  return db.prepare(
+    'SELECT id, task, steps, outcome, created_at FROM memory_solutions ORDER BY created_at DESC',
+  ).all() as { id: number; task: string; steps: string; outcome: string; created_at: string }[];
+}
+
+export function saveSolution(task: string, steps: string, outcome: string): void {
+  db.prepare(
+    'INSERT INTO memory_solutions (task, steps, outcome) VALUES (?, ?, ?)',
+  ).run(task, steps, outcome);
+}
+
+export function deleteSolution(id: number): void {
+  db.prepare('DELETE FROM memory_solutions WHERE id = ?').run(id);
+}
+
+// --- Knowledge (LTM) ---
+
+export function getKnowledge(): { id: number; fact: string; source: string; created_at: string }[] {
+  return db.prepare(
+    'SELECT id, fact, source, created_at FROM memory_knowledge ORDER BY created_at DESC',
+  ).all() as { id: number; fact: string; source: string; created_at: string }[];
+}
+
+export function saveKnowledge(fact: string, source: string): void {
+  db.prepare(
+    'INSERT OR IGNORE INTO memory_knowledge (fact, source) VALUES (?, ?)',
+  ).run(fact, source);
+}
+
+export function deleteKnowledge(id: number): void {
+  db.prepare('DELETE FROM memory_knowledge WHERE id = ?').run(id);
+}
+
+// --- Clear all memory ---
+
+export function clearAllMemory(): void {
+  db.prepare('DELETE FROM working_memory').run();
+  db.prepare('DELETE FROM memory_profile').run();
+  db.prepare('DELETE FROM memory_solutions').run();
+  db.prepare('DELETE FROM memory_knowledge').run();
 }
