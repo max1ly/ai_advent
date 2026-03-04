@@ -8,6 +8,7 @@ import ErrorMessage from './components/ErrorMessage';
 import ModelSelector from './components/ModelSelector';
 import MetricsDisplay from './components/MetricsDisplay';
 import MemoryDialog from './components/MemoryDialog';
+import ProfileBar from './components/ProfileBar';
 import type { Metrics, StrategyType, Branch } from '@/lib/types';
 import type { DisplayMessage, FileAttachment } from '@/lib/types';
 import { DEFAULT_MODEL } from '@/lib/models';
@@ -41,6 +42,7 @@ export default function Home() {
   const msgCounterRef = useRef(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isMemoryOpen, setIsMemoryOpen] = useState(false);
+  const [profileId, setProfileId] = useState<number | null>(null);
 
   const handleMemoryOpen = useCallback(() => setIsMemoryOpen(true), []);
 
@@ -52,6 +54,8 @@ export default function Home() {
     if (savedStrategy) setStrategy(savedStrategy);
     const savedWindowSize = localStorage.getItem('chat-window-size');
     if (savedWindowSize) setWindowSize(parseInt(savedWindowSize) || 10);
+    const savedProfileId = localStorage.getItem('chat-profile-id');
+    if (savedProfileId) setProfileId(parseInt(savedProfileId) || null);
   }, []);
 
   useEffect(() => {
@@ -107,6 +111,15 @@ export default function Home() {
   const handleWindowSizeChange = useCallback((size: number) => {
     setWindowSize(size);
     localStorage.setItem('chat-window-size', String(size));
+  }, []);
+
+  const handleProfileChange = useCallback((id: number | null) => {
+    setProfileId(id);
+    if (id) {
+      localStorage.setItem('chat-profile-id', String(id));
+    } else {
+      localStorage.removeItem('chat-profile-id');
+    }
   }, []);
 
   const handleNewChat = useCallback(async () => {
@@ -260,6 +273,7 @@ export default function Home() {
             files: filesPayload.length > 0 ? filesPayload : undefined,
             strategy,
             windowSize,
+            profileId,
           }),
         });
 
@@ -323,7 +337,7 @@ export default function Home() {
         setStatus('ready');
       }
     },
-    [input, model, status, pendingFiles, strategy, windowSize],
+    [input, model, status, pendingFiles, strategy, windowSize, profileId],
   );
 
   const handleRetry = useCallback(() => {
@@ -358,6 +372,9 @@ export default function Home() {
           onMemoryOpen={handleMemoryOpen}
         />
       </header>
+
+      {/* Profile selector */}
+      <ProfileBar selectedProfileId={profileId} onProfileChange={handleProfileChange} />
 
       {/* Messages area */}
       <ChatContainer messages={messages} status={status} />

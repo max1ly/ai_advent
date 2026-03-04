@@ -3,6 +3,7 @@ import { deepseek } from '@/lib/deepseek';
 import { openrouter } from '@/lib/openrouter';
 import { MODELS, type ModelConfig } from '@/lib/models';
 import { memoryManager } from '@/lib/memory';
+import { getProfileById } from '@/lib/db';
 import type { StrategySettings, StrategyType, SessionMetrics, LastRequestMetrics, Branch } from '@/lib/types';
 
 type Message = { role: 'user' | 'assistant'; content: string };
@@ -81,7 +82,7 @@ export class ChatAgent {
     };
   }
 
-  chat(userMessage: string, files?: ChatFile[]) {
+  chat(userMessage: string, files?: ChatFile[], profileId?: number) {
     let fullMessage = userMessage;
     if (files?.length) {
       const extracted = extractTextFromFiles(files);
@@ -111,13 +112,17 @@ export class ChatAgent {
 
         const messages = this.buildMessages();
 
+        // Inject user profile as system prompt prefix
+        const userProfile = profileId ? getProfileById(profileId) : null;
+        const profilePrefix = userProfile ? userProfile.description : '';
+
         // Inject memory layers into system prompt
         const memorySection = this.sessionId
           ? memoryManager.buildSystemPromptSection(this.sessionId)
           : '';
-        const fullSystemPrompt = memorySection
-          ? `${systemPrompt}\n\n${memorySection}`
-          : systemPrompt;
+
+        const promptParts = [profilePrefix, systemPrompt, memorySection].filter(Boolean);
+        const fullSystemPrompt = promptParts.join('\n\n');
 
         console.log(`
 \x1b[36m[Agent]\x1b[0m ─────────────────────────
@@ -126,6 +131,7 @@ export class ChatAgent {
   History:        ${this.getActiveHistory().length} messages
   Strategy:       ${this.strategy} (window: ${this.windowSize})
   Facts:          ${Object.keys(this.facts).length} keys
+  Profile:        ${userProfile ? `"${userProfile.name}"` : 'none'}
   Memory:         ${memorySection ? 'injected' : 'empty'}
   Branches:       ${this.branches.length}
 ────────────────────────────────────`);

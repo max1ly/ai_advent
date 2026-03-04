@@ -3,7 +3,7 @@ import { getOrCreateAgent } from '@/lib/sessions';
 import type { StrategyType } from '@/lib/types';
 
 export async function POST(req: Request) {
-  const { message, sessionId, model, files, strategy, windowSize } = await req.json();
+  const { message, sessionId, model, files, strategy, windowSize, profileId } = await req.json();
 
   const strategySettings = {
     type: (strategy as StrategyType) ?? 'sliding-window',
@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   const { agent, sessionId: sid } = getOrCreateAgent(sessionId, model, strategySettings);
 
   try {
-    const stream = agent.chat(message, files);
+    const stream = agent.chat(message, files, profileId ? Number(profileId) : undefined);
     return createUIMessageStreamResponse({
       stream,
       headers: { 'x-session-id': sid },

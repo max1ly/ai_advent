@@ -73,6 +73,13 @@ function createDatabase(): Database.Database {
       source TEXT NOT NULL DEFAULT 'conversation',
       created_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS user_profiles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      description TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
   `);
 
   console.log('\x1b[36m[DB]\x1b[0m SQLite initialized (WAL mode)');
@@ -238,4 +245,30 @@ export function clearAllMemory(): void {
   db.prepare('DELETE FROM memory_profile').run();
   db.prepare('DELETE FROM memory_solutions').run();
   db.prepare('DELETE FROM memory_knowledge').run();
+}
+
+// --- User Profiles ---
+
+export function getProfiles(): { id: number; name: string; description: string; created_at: string }[] {
+  return db.prepare(
+    'SELECT id, name, description, created_at FROM user_profiles ORDER BY name',
+  ).all() as { id: number; name: string; description: string; created_at: string }[];
+}
+
+export function getProfileById(id: number): { id: number; name: string; description: string; created_at: string } | null {
+  const row = db.prepare(
+    'SELECT id, name, description, created_at FROM user_profiles WHERE id = ?',
+  ).get(id) as { id: number; name: string; description: string; created_at: string } | undefined;
+  return row ?? null;
+}
+
+export function createProfile(name: string, description: string): number {
+  const result = db.prepare(
+    'INSERT INTO user_profiles (name, description) VALUES (?, ?)',
+  ).run(name, description);
+  return Number(result.lastInsertRowid);
+}
+
+export function deleteProfile(id: number): void {
+  db.prepare('DELETE FROM user_profiles WHERE id = ?').run(id);
 }
