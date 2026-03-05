@@ -4,6 +4,7 @@ import { openrouter } from '@/lib/openrouter';
 import { MODELS, type ModelConfig } from '@/lib/models';
 import { memoryManager } from '@/lib/memory';
 import { getProfileById } from '@/lib/db';
+import { TaskStateMachine, parseTransitionSignals, detectTaskIntent } from '@/lib/task-state';
 import type { StrategySettings, StrategyType, SessionMetrics, LastRequestMetrics, Branch } from '@/lib/types';
 
 type Message = { role: 'user' | 'assistant'; content: string };
@@ -53,6 +54,7 @@ export class ChatAgent {
   private branches: Branch[] = [];
   private activeBranchId: string | null = null;
   private checkpointHistory: Message[] | null = null;
+  private taskState: TaskStateMachine;
 
   constructor(opts?: {
     model?: string;
@@ -80,6 +82,7 @@ export class ChatAgent {
       totalStrategyTokens: 0,
       exchanges: 0,
     };
+    this.taskState = new TaskStateMachine(this.sessionId);
   }
 
   chat(userMessage: string, files?: ChatFile[], profileId?: number) {
@@ -93,6 +96,16 @@ export class ChatAgent {
 
     this.getActiveHistory().push({ role: 'user', content: fullMessage });
     this.onMessagePersist?.('user', userMessage, files);
+
+    // Task state: detect task intent when idle
+    if (this.taskState.getState().status === 'idle' && detectTaskIntent(fullMessage)) {
+      this.taskState.transition('TASK_START', { taskDescription: fullMessage });
+    }
+
+    // Task state: if paused, auto-resume on user message
+    if (this.taskState.getState().paused) {
+      this.taskState.resume();
+    }
 
     const { modelConfig, systemPrompt } = this;
     const modelInstance =
@@ -121,7 +134,10 @@ export class ChatAgent {
           ? memoryManager.buildSystemPromptSection(this.sessionId)
           : '';
 
-        const promptParts = [profilePrefix, systemPrompt, memorySection].filter(Boolean);
+        // Inject task state into system prompt
+        const taskStateSection = this.taskState.buildStatePrompt();
+
+        const promptParts = [profilePrefix, systemPrompt, memorySection, taskStateSection].filter(Boolean);
         const fullSystemPrompt = promptParts.join('\n\n');
 
         console.log(`
@@ -134,6 +150,7 @@ export class ChatAgent {
   Profile:        ${userProfile ? `"${userProfile.name}"` : 'none'}
   Memory:         ${memorySection ? 'injected' : 'empty'}
   Branches:       ${this.branches.length}
+  Task State:     ${this.taskState.getState().status}${this.taskState.getState().paused ? ' (PAUSED)' : ''}
 ────────────────────────────────────`);
 
         const result = streamText({
@@ -166,13 +183,44 @@ export class ChatAgent {
   Strategy: ${strategyTokens} tokens overhead
   History:  ${this.getActiveHistory().length} messages`);
 
+            const currentTaskState = this.taskState.getState();
+
             writer.write({
               type: 'data-metrics',
               data: {
                 lastRequest,
                 session: { ...this.sessionMetrics },
+                taskState: {
+                  status: currentTaskState.status,
+                  currentStep: currentTaskState.currentStep,
+                  planLength: currentTaskState.plan.length,
+                  paused: currentTaskState.paused,
+                },
               },
             });
+
+            // Task state: parse transition signals from LLM response
+            const signals = parseTransitionSignals(text);
+            for (const signal of signals) {
+              if (signal.type === 'STEP_COMPLETE') {
+                this.taskState.transition('STEP_COMPLETE', {
+                  stepResult: {
+                    step: signal.step ?? this.taskState.getState().currentStep,
+                    outcome: `Step ${(signal.step ?? 0) + 1} completed`,
+                    status: 'completed',
+                  },
+                });
+              } else if (signal.type === 'PLAN_READY') {
+                const planSteps = this.extractPlanFromText(text);
+                this.taskState.transition('PLAN_READY', { plan: planSteps });
+              } else if (signal.type === 'TASK_DONE') {
+                this.taskState.transition('TASK_DONE', { summary: 'Task completed successfully' });
+              } else if (signal.type === 'TASK_FAILED') {
+                this.taskState.transition('TASK_FAILED', { summary: 'Validation found issues' });
+              } else {
+                this.taskState.transition(signal.type);
+              }
+            }
 
             // Fire-and-forget: extract memories without blocking the response
             if (this.sessionId) {
@@ -335,6 +383,40 @@ export class ChatAgent {
     console.log(`\x1b[33m[Agent]\x1b[0m Facts extracted: ${Object.keys(this.facts).length} keys (${tokens} tokens)`);
 
     return tokens;
+  }
+
+  getTaskState(): { status: string; currentStep: number; planLength: number; paused: boolean } {
+    const state = this.taskState.getState();
+    return {
+      status: state.status,
+      currentStep: state.currentStep,
+      planLength: state.plan.length,
+      paused: state.paused,
+    };
+  }
+
+  pauseTask(): void {
+    this.taskState.pause();
+  }
+
+  resumeTask(): void {
+    this.taskState.resume();
+  }
+
+  resetTask(): void {
+    this.taskState.reset();
+  }
+
+  private extractPlanFromText(text: string): string[] {
+    const lines = text.split('\n');
+    const steps: string[] = [];
+    for (const line of lines) {
+      const match = line.match(/^\s*\d+\.\s+(.+)/);
+      if (match) {
+        steps.push(match[1].trim());
+      }
+    }
+    return steps.length > 0 ? steps : ['Plan details not parsed'];
   }
 
   private getModelInstance() {

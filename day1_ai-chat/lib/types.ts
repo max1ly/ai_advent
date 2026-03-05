@@ -97,3 +97,25 @@ export interface MemoryExtractionResult {
   solutions: { task: string; steps: string[]; outcome: string } | null;
   knowledge: { fact: string; source: string; operation: 'ADD' | 'NOOP' }[];
 }
+
+// Task State Machine types
+
+export type TaskStatus = 'idle' | 'planning' | 'execution' | 'validation' | 'done' | 'failed';
+
+export interface StepResult {
+  step: number;
+  outcome: string;
+  status: 'completed' | 'skipped' | 'failed';
+}
+
+export interface TaskState {
+  sessionId: string;
+  status: TaskStatus;
+  paused: boolean;
+  taskDescription: string | null;
+  plan: string[];
+  currentStep: number;
+  stepResults: StepResult[];
+  summary: string | null;
+  updatedAt: string;
+}

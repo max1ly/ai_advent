@@ -77,6 +77,20 @@ These were made deliberately — do not change without discussion:
 - **Next.js 15** (not 16) — 16 has Turbopack build bugs
 - **Port 3030** — avoids conflicts with other local services
 
+## Auto-Routing Rules
+
+Apply these `.claude/rules/` automatically based on task context — no `@` reference needed:
+
+| Rule | Activate When |
+|---|---|
+| `debugging.md` | Bug reports, test failures, unexpected behavior, "why isn't this working" |
+| `backend-engineer.md` | Implementing API routes, server logic, database changes |
+| `frontend-engineer.md` | Implementing UI components, client-side features, styling |
+| `testing.md` | Writing or modifying tests (auto-loaded for `server/tests/` and `client/e2e/` paths) |
+| `qa.md` | Validating a completed feature, running smoke tests, exploratory testing |
+
+When multiple rules apply (e.g., a bug in a frontend component), layer them: use `debugging.md` for the investigation workflow + `frontend-engineer.md` for implementation standards.
+
 ## References
 
 - `.planning/` — Project scope, requirements (REQUIREMENTS.md), roadmap (ROADMAP.md), current state (STATE.md)

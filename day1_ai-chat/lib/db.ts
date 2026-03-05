@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'fs';
 import { join } from 'path';
+import type { TaskState } from '@/lib/types';
 
 // Prevent multiple connections during Next.js HMR (research finding #2)
 declare global {
@@ -79,6 +80,18 @@ function createDatabase(): Database.Database {
       name TEXT NOT NULL UNIQUE,
       description TEXT NOT NULL,
       created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS task_state (
+      session_id TEXT PRIMARY KEY,
+      status TEXT NOT NULL DEFAULT 'idle',
+      paused INTEGER NOT NULL DEFAULT 0,
+      task_description TEXT,
+      plan TEXT NOT NULL DEFAULT '[]',
+      current_step INTEGER NOT NULL DEFAULT 0,
+      step_results TEXT NOT NULL DEFAULT '[]',
+      summary TEXT,
+      updated_at TEXT DEFAULT (datetime('now'))
     );
   `);
 
@@ -271,4 +284,54 @@ export function createProfile(name: string, description: string): number {
 
 export function deleteProfile(id: number): void {
   db.prepare('DELETE FROM user_profiles WHERE id = ?').run(id);
+}
+
+// --- Task State ---
+
+export function getTaskState(sessionId: string): TaskState | null {
+  const row = db.prepare(
+    'SELECT session_id, status, paused, task_description, plan, current_step, step_results, summary, updated_at FROM task_state WHERE session_id = ?',
+  ).get(sessionId) as {
+    session_id: string;
+    status: string;
+    paused: number;
+    task_description: string | null;
+    plan: string;
+    current_step: number;
+    step_results: string;
+    summary: string | null;
+    updated_at: string;
+  } | undefined;
+
+  if (!row) return null;
+
+  return {
+    sessionId: row.session_id,
+    status: row.status as TaskState['status'],
+    paused: row.paused === 1,
+    taskDescription: row.task_description,
+    plan: JSON.parse(row.plan),
+    currentStep: row.current_step,
+    stepResults: JSON.parse(row.step_results),
+    summary: row.summary,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function saveTaskState(state: TaskState): void {
+  db.prepare(
+    `INSERT INTO task_state (session_id, status, paused, task_description, plan, current_step, step_results, summary, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(session_id) DO UPDATE SET
+       status = ?, paused = ?, task_description = ?, plan = ?, current_step = ?, step_results = ?, summary = ?, updated_at = datetime('now')`,
+  ).run(
+    state.sessionId, state.status, state.paused ? 1 : 0, state.taskDescription,
+    JSON.stringify(state.plan), state.currentStep, JSON.stringify(state.stepResults), state.summary,
+    state.status, state.paused ? 1 : 0, state.taskDescription,
+    JSON.stringify(state.plan), state.currentStep, JSON.stringify(state.stepResults), state.summary,
+  );
+}
+
+export function deleteTaskState(sessionId: string): void {
+  db.prepare('DELETE FROM task_state WHERE session_id = ?').run(sessionId);
 }
