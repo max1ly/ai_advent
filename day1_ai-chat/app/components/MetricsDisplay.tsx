@@ -14,6 +14,8 @@ interface MetricsDisplayProps {
   onCheckpoint: () => void;
   onSwitchBranch: (branchId: string) => void;
   onMemoryOpen: () => void;
+  onInvariantsOpen: () => void;
+  invariantCount: number;
 }
 
 export default function MetricsDisplay({
@@ -28,6 +30,8 @@ export default function MetricsDisplay({
   onCheckpoint,
   onSwitchBranch,
   onMemoryOpen,
+  onInvariantsOpen,
+  invariantCount,
 }: MetricsDisplayProps) {
   return (
     <div className="flex items-center gap-3 text-sm flex-wrap">
@@ -111,6 +115,14 @@ export default function MetricsDisplay({
 
       {/* Spacer pushes New Chat to the right */}
       <div className="flex-1" />
+
+      {/* Invariants button */}
+      <button
+        onClick={onInvariantsOpen}
+        className="px-3 py-1 rounded text-sm text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:scale-105 active:scale-95 transition-all"
+      >
+        Invariants{invariantCount > 0 ? ` (${invariantCount})` : ''}
+      </button>
 
       {/* Memory button */}
       <button

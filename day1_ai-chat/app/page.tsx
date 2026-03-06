@@ -8,8 +8,9 @@ import ErrorMessage from './components/ErrorMessage';
 import ModelSelector from './components/ModelSelector';
 import MetricsDisplay from './components/MetricsDisplay';
 import MemoryDialog from './components/MemoryDialog';
+import InvariantsDialog from './components/InvariantsDialog';
 import ProfileBar from './components/ProfileBar';
-import type { Metrics, StrategyType, Branch } from '@/lib/types';
+import type { Metrics, StrategyType, Branch, Invariant } from '@/lib/types';
 import type { DisplayMessage, FileAttachment } from '@/lib/types';
 import { DEFAULT_MODEL } from '@/lib/models';
 
@@ -42,9 +43,18 @@ export default function Home() {
   const msgCounterRef = useRef(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isMemoryOpen, setIsMemoryOpen] = useState(false);
+  const [isInvariantsOpen, setIsInvariantsOpen] = useState(false);
+  const [invariants, setInvariants] = useState<Invariant[]>([]);
   const [profileId, setProfileId] = useState<number | null>(null);
 
   const handleMemoryOpen = useCallback(() => setIsMemoryOpen(true), []);
+
+  const handleInvariantsUpdate = useCallback((updated: Invariant[]) => {
+    setInvariants(updated);
+    if (sessionIdRef.current) {
+      localStorage.setItem(`invariants-${sessionIdRef.current}`, JSON.stringify(updated));
+    }
+  }, []);
 
   // Hydrate from localStorage after mount to avoid SSR/client mismatch
   useEffect(() => {
@@ -66,6 +76,10 @@ export default function Home() {
     }
 
     sessionIdRef.current = savedSessionId;
+    const savedInvariants = localStorage.getItem(`invariants-${savedSessionId}`);
+    if (savedInvariants) {
+      try { setInvariants(JSON.parse(savedInvariants)); } catch {}
+    }
     fetch(`/api/chat/${savedSessionId}`)
       .then((res) => {
         if (!res.ok) throw new Error('Failed to load history');
@@ -135,6 +149,7 @@ export default function Home() {
     setMessages([]);
     setMetrics(null);
     setError(null);
+    setInvariants([]);
     setBranches([]);
     setActiveBranchId(null);
   }, []);
@@ -274,6 +289,7 @@ export default function Home() {
             strategy,
             windowSize,
             profileId,
+            invariants: invariants.filter(inv => inv.enabled).map(inv => inv.text),
           }),
         });
 
@@ -285,6 +301,9 @@ export default function Home() {
         if (sid) {
           sessionIdRef.current = sid;
           localStorage.setItem('chat-session-id', sid);
+          if (invariants.length > 0) {
+            localStorage.setItem(`invariants-${sid}`, JSON.stringify(invariants));
+          }
         }
 
         const reader = res.body!.getReader();
@@ -337,7 +356,7 @@ export default function Home() {
         setStatus('ready');
       }
     },
-    [input, model, status, pendingFiles, strategy, windowSize, profileId],
+    [input, model, status, pendingFiles, strategy, windowSize, profileId, invariants],
   );
 
   const handleRetry = useCallback(() => {
@@ -370,6 +389,8 @@ export default function Home() {
           onCheckpoint={handleCheckpoint}
           onSwitchBranch={handleSwitchBranch}
           onMemoryOpen={handleMemoryOpen}
+          onInvariantsOpen={() => setIsInvariantsOpen(true)}
+          invariantCount={invariants.filter(inv => inv.enabled).length}
         />
       </header>
 
@@ -398,6 +419,13 @@ export default function Home() {
         onClose={() => setIsMemoryOpen(false)}
         sessionId={sessionIdRef.current}
         stmInfo={{ messageCount: messages.length, strategy, windowSize }}
+      />
+
+      <InvariantsDialog
+        isOpen={isInvariantsOpen}
+        onClose={() => setIsInvariantsOpen(false)}
+        invariants={invariants}
+        onUpdate={handleInvariantsUpdate}
       />
     </div>
   );

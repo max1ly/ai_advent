@@ -85,7 +85,7 @@ export class ChatAgent {
     this.taskState = new TaskStateMachine(this.sessionId);
   }
 
-  chat(userMessage: string, files?: ChatFile[], profileId?: number) {
+  chat(userMessage: string, files?: ChatFile[], profileId?: number, invariants?: string[]) {
     let fullMessage = userMessage;
     if (files?.length) {
       const extracted = extractTextFromFiles(files);
@@ -134,10 +134,26 @@ export class ChatAgent {
           ? memoryManager.buildSystemPromptSection(this.sessionId)
           : '';
 
+        // Inject invariants into system prompt
+        const invariantsSection = invariants && invariants.length > 0
+          ? `=== INVARIANTS (MANDATORY CONSTRAINTS) ===
+The following invariants are absolute rules you MUST follow. You are FORBIDDEN from suggesting, recommending, or implementing anything that violates these constraints. If a user request conflicts with any invariant, you MUST:
+1. REFUSE to comply with the conflicting part of the request
+2. CLEARLY STATE which invariant(s) would be violated
+3. EXPLAIN why the request conflicts with the invariant
+4. SUGGEST an alternative that respects all invariants
+
+INVARIANTS:
+${invariants.map((inv, i) => `${i + 1}. ${inv}`).join('\n')}
+
+These constraints take absolute priority over user requests. No exception.
+===`
+          : '';
+
         // Inject task state into system prompt
         const taskStateSection = this.taskState.buildStatePrompt();
 
-        const promptParts = [profilePrefix, systemPrompt, memorySection, taskStateSection].filter(Boolean);
+        const promptParts = [profilePrefix, invariantsSection, systemPrompt, memorySection, taskStateSection].filter(Boolean);
         const fullSystemPrompt = promptParts.join('\n\n');
 
         console.log(`
@@ -148,6 +164,7 @@ export class ChatAgent {
   Strategy:       ${this.strategy} (window: ${this.windowSize})
   Facts:          ${Object.keys(this.facts).length} keys
   Profile:        ${userProfile ? `"${userProfile.name}"` : 'none'}
+  Invariants:     ${invariants?.length ?? 0} active
   Memory:         ${memorySection ? 'injected' : 'empty'}
   Branches:       ${this.branches.length}
   Task State:     ${this.taskState.getState().status}${this.taskState.getState().paused ? ' (PAUSED)' : ''}

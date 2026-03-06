@@ -98,6 +98,15 @@ export interface MemoryExtractionResult {
   knowledge: { fact: string; source: string; operation: 'ADD' | 'NOOP' }[];
 }
 
+// Invariants
+
+export interface Invariant {
+  id: string;
+  text: string;
+  enabled: boolean;
+  createdAt: number;
+}
+
 // Task State Machine types
 
 export type TaskStatus = 'idle' | 'planning' | 'execution' | 'validation' | 'done' | 'failed';
