@@ -4,7 +4,7 @@ import { openrouter } from '@/lib/openrouter';
 import { MODELS, type ModelConfig } from '@/lib/models';
 import { memoryManager } from '@/lib/memory';
 import { getProfileById } from '@/lib/db';
-import { TaskStateMachine, parseTransitionSignals, detectTaskIntent } from '@/lib/task-state';
+import { TaskStateMachine, parseTransitionSignals, detectTaskIntent, detectApprovalIntent, detectRejectionIntent } from '@/lib/task-state';
 import type { StrategySettings, StrategyType, SessionMetrics, LastRequestMetrics, Branch } from '@/lib/types';
 
 type Message = { role: 'user' | 'assistant'; content: string };
@@ -105,6 +105,25 @@ export class ChatAgent {
     // Task state: if paused, auto-resume on user message
     if (this.taskState.getState().paused) {
       this.taskState.resume();
+    }
+
+    // Gate: review state — check for plan approval/rejection
+    const currentStatus = this.taskState.getState().status;
+    if (currentStatus === 'review') {
+      if (detectApprovalIntent(fullMessage)) {
+        this.taskState.transition('PLAN_APPROVED');
+      } else if (detectRejectionIntent(fullMessage)) {
+        this.taskState.transition('PLAN_REJECTED');
+      }
+    }
+
+    // Gate: validation state — check for result approval/rejection
+    if (currentStatus === 'validation') {
+      if (detectApprovalIntent(fullMessage)) {
+        this.taskState.transition('RESULT_APPROVED', { summary: 'Approved by user' });
+      } else if (detectRejectionIntent(fullMessage)) {
+        this.taskState.transition('RESULT_REJECTED');
+      }
     }
 
     const { modelConfig, systemPrompt } = this;
@@ -212,6 +231,7 @@ These constraints take absolute priority over user requests. No exception.
                   currentStep: currentTaskState.currentStep,
                   planLength: currentTaskState.plan.length,
                   paused: currentTaskState.paused,
+                  needsApproval: currentTaskState.status === 'review' || currentTaskState.status === 'validation',
                 },
               },
             });
@@ -219,8 +239,9 @@ These constraints take absolute priority over user requests. No exception.
             // Task state: parse transition signals from LLM response
             const signals = parseTransitionSignals(text);
             for (const signal of signals) {
+              let success = false;
               if (signal.type === 'STEP_COMPLETE') {
-                this.taskState.transition('STEP_COMPLETE', {
+                success = this.taskState.transition('STEP_COMPLETE', {
                   stepResult: {
                     step: signal.step ?? this.taskState.getState().currentStep,
                     outcome: `Step ${(signal.step ?? 0) + 1} completed`,
@@ -229,13 +250,16 @@ These constraints take absolute priority over user requests. No exception.
                 });
               } else if (signal.type === 'PLAN_READY') {
                 const planSteps = this.extractPlanFromText(text);
-                this.taskState.transition('PLAN_READY', { plan: planSteps });
+                success = this.taskState.transition('PLAN_READY', { plan: planSteps });
               } else if (signal.type === 'TASK_DONE') {
-                this.taskState.transition('TASK_DONE', { summary: 'Task completed successfully' });
+                success = this.taskState.transition('TASK_DONE', { summary: 'Task completed successfully' });
               } else if (signal.type === 'TASK_FAILED') {
-                this.taskState.transition('TASK_FAILED', { summary: 'Validation found issues' });
+                success = this.taskState.transition('TASK_FAILED', { summary: 'Validation found issues' });
               } else {
-                this.taskState.transition(signal.type);
+                success = this.taskState.transition(signal.type);
+              }
+              if (!success) {
+                this.taskState.setBlockedSignal(signal.type);
               }
             }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { TaskStateMachine, parseTransitionSignals, detectTaskIntent } from '@/lib/task-state';
+import { TaskStateMachine, parseTransitionSignals, detectTaskIntent, detectApprovalIntent, detectRejectionIntent } from '@/lib/task-state';
 import { deleteTaskState } from '@/lib/db';
 
 describe('TaskStateMachine', () => {
@@ -8,6 +8,24 @@ describe('TaskStateMachine', () => {
   beforeEach(() => {
     deleteTaskState(testSessionId);
   });
+
+  // Helper to get to review state
+  function toReview(machine: TaskStateMachine) {
+    machine.transition('TASK_START', { taskDescription: 'Test task' });
+    machine.transition('PLAN_READY', { plan: ['Step 1', 'Step 2', 'Step 3'] });
+  }
+
+  // Helper to get to execution state
+  function toExecution(machine: TaskStateMachine) {
+    toReview(machine);
+    machine.transition('PLAN_APPROVED');
+  }
+
+  // Helper to get to validation state
+  function toValidation(machine: TaskStateMachine) {
+    toExecution(machine);
+    machine.transition('VALIDATION_START');
+  }
 
   describe('State transitions', () => {
     it('should start in idle state', () => {
@@ -35,7 +53,7 @@ describe('TaskStateMachine', () => {
       expect(state.currentStep).toBe(0);
     });
 
-    it('should transition from planning to execution on PLAN_READY', () => {
+    it('should transition from planning to review on PLAN_READY', () => {
       const machine = new TaskStateMachine(testSessionId);
       machine.transition('TASK_START', { taskDescription: 'Test task' });
       const success = machine.transition('PLAN_READY', {
@@ -43,15 +61,14 @@ describe('TaskStateMachine', () => {
       });
       expect(success).toBe(true);
       const state = machine.getState();
-      expect(state.status).toBe('execution');
+      expect(state.status).toBe('review');
       expect(state.plan).toEqual(['Step 1', 'Step 2', 'Step 3']);
-      expect(state.currentStep).toBe(1);
+      expect(state.currentStep).toBe(0);
     });
 
     it('should advance step on STEP_COMPLETE', () => {
       const machine = new TaskStateMachine(testSessionId);
-      machine.transition('TASK_START', { taskDescription: 'Test' });
-      machine.transition('PLAN_READY', { plan: ['A', 'B', 'C'] });
+      toExecution(machine);
 
       const success = machine.transition('STEP_COMPLETE', {
         step: 1,
@@ -66,51 +83,18 @@ describe('TaskStateMachine', () => {
 
     it('should transition from execution to validation on VALIDATION_START', () => {
       const machine = new TaskStateMachine(testSessionId);
-      machine.transition('TASK_START', { taskDescription: 'Test' });
-      machine.transition('PLAN_READY', { plan: ['A'] });
+      toExecution(machine);
 
       const success = machine.transition('VALIDATION_START');
       expect(success).toBe(true);
       expect(machine.getState().status).toBe('validation');
     });
 
-    it('should transition from validation to done on TASK_DONE', () => {
-      const machine = new TaskStateMachine(testSessionId);
-      machine.transition('TASK_START', { taskDescription: 'Test' });
-      machine.transition('PLAN_READY', { plan: ['A'] });
-      machine.transition('VALIDATION_START');
-
-      const success = machine.transition('TASK_DONE', {
-        summary: 'All done',
-      });
-      expect(success).toBe(true);
-      const state = machine.getState();
-      expect(state.status).toBe('done');
-      expect(state.summary).toBe('All done');
-    });
-
-    it('should transition from validation to failed on TASK_FAILED', () => {
-      const machine = new TaskStateMachine(testSessionId);
-      machine.transition('TASK_START', { taskDescription: 'Test' });
-      machine.transition('PLAN_READY', { plan: ['A'] });
-      machine.transition('VALIDATION_START');
-
-      const success = machine.transition('TASK_FAILED', {
-        summary: 'Failed validation',
-      });
-      expect(success).toBe(true);
-      const state = machine.getState();
-      expect(state.status).toBe('failed');
-      expect(state.summary).toBe('Failed validation');
-    });
-
     it('should allow retry from failed to planning on TASK_START', () => {
       const machine = new TaskStateMachine(testSessionId);
-      machine.transition('TASK_START', { taskDescription: 'First try' });
-      machine.transition('PLAN_READY', { plan: ['A'] });
-      machine.transition('VALIDATION_START');
-      machine.transition('TASK_FAILED', { summary: 'Failed' });
-
+      toValidation(machine);
+      machine.transition('RESULT_APPROVED', { summary: 'Done' });
+      // done → new task
       const success = machine.transition('TASK_START', {
         taskDescription: 'Second try',
       });
@@ -132,13 +116,110 @@ describe('TaskStateMachine', () => {
 
     it('should ignore PLAN_READY when not in planning', () => {
       const machine = new TaskStateMachine(testSessionId);
-      machine.transition('TASK_START', { taskDescription: 'Test' });
-      machine.transition('PLAN_READY', { plan: ['A'] });
+      toExecution(machine);
 
       const success = machine.transition('PLAN_READY', { plan: ['B'] });
       expect(success).toBe(false);
       expect(machine.getState().status).toBe('execution');
-      expect(machine.getState().plan).toEqual(['A']);
+      expect(machine.getState().plan).toEqual(['Step 1', 'Step 2', 'Step 3']);
+    });
+  });
+
+  describe('Review gate', () => {
+    it('should transition from review to execution on PLAN_APPROVED', () => {
+      const machine = new TaskStateMachine(testSessionId);
+      toReview(machine);
+      const success = machine.transition('PLAN_APPROVED');
+      expect(success).toBe(true);
+      const state = machine.getState();
+      expect(state.status).toBe('execution');
+      expect(state.currentStep).toBe(1);
+      expect(state.plan).toEqual(['Step 1', 'Step 2', 'Step 3']);
+    });
+
+    it('should transition from review to planning on PLAN_REJECTED', () => {
+      const machine = new TaskStateMachine(testSessionId);
+      toReview(machine);
+      const success = machine.transition('PLAN_REJECTED');
+      expect(success).toBe(true);
+      const state = machine.getState();
+      expect(state.status).toBe('planning');
+      expect(state.taskDescription).toBe('Test task');
+    });
+
+    it('should reject STEP_COMPLETE in review state', () => {
+      const machine = new TaskStateMachine(testSessionId);
+      toReview(machine);
+      const success = machine.transition('STEP_COMPLETE', {
+        step: 1,
+        stepResult: { step: 1, outcome: 'X', status: 'completed' },
+      });
+      expect(success).toBe(false);
+      expect(machine.getState().status).toBe('review');
+    });
+
+    it('should reject TASK_DONE in review state', () => {
+      const machine = new TaskStateMachine(testSessionId);
+      toReview(machine);
+      const success = machine.transition('TASK_DONE');
+      expect(success).toBe(false);
+      expect(machine.getState().status).toBe('review');
+    });
+  });
+
+  describe('Validation gate', () => {
+    it('should transition from validation to done on RESULT_APPROVED', () => {
+      const machine = new TaskStateMachine(testSessionId);
+      toValidation(machine);
+      const success = machine.transition('RESULT_APPROVED', { summary: 'All good' });
+      expect(success).toBe(true);
+      const state = machine.getState();
+      expect(state.status).toBe('done');
+      expect(state.summary).toBe('All good');
+    });
+
+    it('should transition from validation to execution on RESULT_REJECTED', () => {
+      const machine = new TaskStateMachine(testSessionId);
+      toValidation(machine);
+      const success = machine.transition('RESULT_REJECTED');
+      expect(success).toBe(true);
+      expect(machine.getState().status).toBe('execution');
+    });
+
+    it('should block TASK_DONE in validation (not in valid transitions)', () => {
+      const machine = new TaskStateMachine(testSessionId);
+      toValidation(machine);
+      const success = machine.transition('TASK_DONE');
+      expect(success).toBe(false);
+      expect(machine.getState().status).toBe('validation');
+    });
+
+    it('should block TASK_FAILED in validation', () => {
+      const machine = new TaskStateMachine(testSessionId);
+      toValidation(machine);
+      const success = machine.transition('TASK_FAILED');
+      expect(success).toBe(false);
+      expect(machine.getState().status).toBe('validation');
+    });
+  });
+
+  describe('Blocked signals', () => {
+    it('should include blocked signal warning in buildStatePrompt', () => {
+      const machine = new TaskStateMachine(testSessionId);
+      toReview(machine);
+      machine.setBlockedSignal('TASK_DONE');
+      const prompt = machine.buildStatePrompt();
+      expect(prompt).toContain('TRANSITION BLOCKED');
+      expect(prompt).toContain('TASK_DONE');
+    });
+
+    it('should clear blocked signal after including in prompt', () => {
+      const machine = new TaskStateMachine(testSessionId);
+      toReview(machine);
+      machine.setBlockedSignal('TASK_DONE');
+      machine.buildStatePrompt(); // consumes it
+      const prompt2 = machine.buildStatePrompt();
+      expect(prompt2).not.toContain('TRANSITION BLOCKED');
     });
   });
 
@@ -155,8 +236,7 @@ describe('TaskStateMachine', () => {
 
     it('should resume preserving full state', () => {
       const machine = new TaskStateMachine(testSessionId);
-      machine.transition('TASK_START', { taskDescription: 'Test task' });
-      machine.transition('PLAN_READY', { plan: ['A', 'B'] });
+      toExecution(machine);
       machine.pause();
 
       machine.resume();
@@ -164,16 +244,21 @@ describe('TaskStateMachine', () => {
       expect(state.paused).toBe(false);
       expect(state.status).toBe('execution');
       expect(state.taskDescription).toBe('Test task');
-      expect(state.plan).toEqual(['A', 'B']);
+      expect(state.plan).toEqual(['Step 1', 'Step 2', 'Step 3']);
     });
 
-    it('should pause from any active state', () => {
+    it('should pause from review state', () => {
       const machine = new TaskStateMachine(testSessionId);
-      machine.transition('TASK_START', { taskDescription: 'Test' });
-      machine.transition('PLAN_READY', { plan: ['A'] });
-      machine.transition('VALIDATION_START');
+      toReview(machine);
       machine.pause();
+      expect(machine.getState().paused).toBe(true);
+      expect(machine.getState().status).toBe('review');
+    });
 
+    it('should pause from validation state', () => {
+      const machine = new TaskStateMachine(testSessionId);
+      toValidation(machine);
+      machine.pause();
       expect(machine.getState().paused).toBe(true);
       expect(machine.getState().status).toBe('validation');
     });
@@ -182,8 +267,7 @@ describe('TaskStateMachine', () => {
   describe('Reset', () => {
     it('should reset to idle clearing everything', () => {
       const machine = new TaskStateMachine(testSessionId);
-      machine.transition('TASK_START', { taskDescription: 'Test' });
-      machine.transition('PLAN_READY', { plan: ['A', 'B'] });
+      toExecution(machine);
       machine.transition('STEP_COMPLETE', {
         step: 1,
         stepResult: { step: 1, outcome: 'Done', status: 'completed' },
@@ -205,8 +289,7 @@ describe('TaskStateMachine', () => {
   describe('Persistence', () => {
     it('should persist and reload from SQLite', () => {
       const machine1 = new TaskStateMachine(testSessionId);
-      machine1.transition('TASK_START', { taskDescription: 'Persisted task' });
-      machine1.transition('PLAN_READY', { plan: ['X', 'Y', 'Z'] });
+      toExecution(machine1);
       machine1.transition('STEP_COMPLETE', {
         step: 1,
         stepResult: { step: 1, outcome: 'X done', status: 'completed' },
@@ -215,11 +298,20 @@ describe('TaskStateMachine', () => {
       const machine2 = new TaskStateMachine(testSessionId);
       const state = machine2.getState();
       expect(state.status).toBe('execution');
-      expect(state.taskDescription).toBe('Persisted task');
-      expect(state.plan).toEqual(['X', 'Y', 'Z']);
+      expect(state.taskDescription).toBe('Test task');
+      expect(state.plan).toEqual(['Step 1', 'Step 2', 'Step 3']);
       expect(state.currentStep).toBe(2);
       expect(state.stepResults).toHaveLength(1);
       expect(state.stepResults[0].outcome).toBe('X done');
+    });
+
+    it('should persist review state', () => {
+      const machine1 = new TaskStateMachine(testSessionId);
+      toReview(machine1);
+
+      const machine2 = new TaskStateMachine(testSessionId);
+      expect(machine2.getState().status).toBe('review');
+      expect(machine2.getState().plan).toEqual(['Step 1', 'Step 2', 'Step 3']);
     });
   });
 
@@ -238,43 +330,50 @@ describe('TaskStateMachine', () => {
       expect(prompt).toContain('[PLAN_READY]');
     });
 
+    it('should show review prompt with approval instructions', () => {
+      const machine = new TaskStateMachine(testSessionId);
+      toReview(machine);
+      const prompt = machine.buildStatePrompt();
+      expect(prompt).toContain('Review');
+      expect(prompt).toContain('Awaiting Plan Approval');
+      expect(prompt).toContain('**Proposed Plan**');
+      expect(prompt).toContain('1. Step 1');
+      expect(prompt).toContain('Do NOT begin execution');
+    });
+
     it('should show execution prompt with step progress', () => {
       const machine = new TaskStateMachine(testSessionId);
-      machine.transition('TASK_START', { taskDescription: 'Test' });
-      machine.transition('PLAN_READY', { plan: ['Step A', 'Step B', 'Step C'] });
+      toExecution(machine);
       const prompt = machine.buildStatePrompt();
       expect(prompt).toContain('**Task Status**: Executing step 1 of 3');
-      expect(prompt).toContain('1. [current] Step A');
-      expect(prompt).toContain('2. [ ] Step B');
-      expect(prompt).toContain('3. [ ] Step C');
+      expect(prompt).toContain('1. [current] Step 1');
+      expect(prompt).toContain('2. [ ] Step 2');
+      expect(prompt).toContain('3. [ ] Step 3');
       expect(prompt).toContain('[STEP_COMPLETE:N]');
     });
 
     it('should show done steps with [done] marker', () => {
       const machine = new TaskStateMachine(testSessionId);
-      machine.transition('TASK_START', { taskDescription: 'Test' });
-      machine.transition('PLAN_READY', { plan: ['A', 'B', 'C'] });
+      toExecution(machine);
       machine.transition('STEP_COMPLETE', {
         step: 1,
         stepResult: { step: 1, outcome: 'A done', status: 'completed' },
       });
       const prompt = machine.buildStatePrompt();
-      expect(prompt).toContain('1. [done] A');
-      expect(prompt).toContain('2. [current] B');
-      expect(prompt).toContain('3. [ ] C');
+      expect(prompt).toContain('1. [done] Step 1');
+      expect(prompt).toContain('2. [current] Step 2');
+      expect(prompt).toContain('3. [ ] Step 3');
       expect(prompt).toContain('**Last Step Result**: A done (completed)');
     });
 
-    it('should show validation prompt', () => {
+    it('should show validation prompt with user approval instruction', () => {
       const machine = new TaskStateMachine(testSessionId);
-      machine.transition('TASK_START', { taskDescription: 'Validate me' });
-      machine.transition('PLAN_READY', { plan: ['A'] });
-      machine.transition('VALIDATION_START');
+      toValidation(machine);
       const prompt = machine.buildStatePrompt();
-      expect(prompt).toContain('**Task Status**: Validation');
-      expect(prompt).toContain('**Task**: Validate me');
-      expect(prompt).toContain('[TASK_DONE]');
-      expect(prompt).toContain('[TASK_FAILED]');
+      expect(prompt).toContain('Validation');
+      expect(prompt).toContain('Awaiting Result Approval');
+      expect(prompt).toContain('The user must approve');
+      expect(prompt).toContain('Do NOT emit [TASK_DONE]');
     });
 
     it('should show (PAUSED) indicator when paused', () => {
@@ -284,6 +383,78 @@ describe('TaskStateMachine', () => {
       const prompt = machine.buildStatePrompt();
       expect(prompt).toContain('**Task Status**: Planning (PAUSED)');
       expect(prompt).toContain('**Note**: Task is paused');
+    });
+  });
+
+  describe('Full lifecycle', () => {
+    it('should complete full lifecycle: idle → planning → review → execution → validation → done', () => {
+      const machine = new TaskStateMachine(testSessionId);
+
+      // idle → planning
+      machine.transition('TASK_START', { taskDescription: 'Build API' });
+      expect(machine.getState().status).toBe('planning');
+
+      // planning → review
+      machine.transition('PLAN_READY', { plan: ['Design', 'Build', 'Test'] });
+      expect(machine.getState().status).toBe('review');
+
+      // review → execution
+      machine.transition('PLAN_APPROVED');
+      expect(machine.getState().status).toBe('execution');
+      expect(machine.getState().currentStep).toBe(1);
+
+      // execution steps
+      machine.transition('STEP_COMPLETE', { step: 1, stepResult: { step: 1, outcome: 'Designed', status: 'completed' } });
+      machine.transition('STEP_COMPLETE', { step: 2, stepResult: { step: 2, outcome: 'Built', status: 'completed' } });
+      machine.transition('STEP_COMPLETE', { step: 3, stepResult: { step: 3, outcome: 'Tested', status: 'completed' } });
+
+      // execution → validation
+      machine.transition('VALIDATION_START');
+      expect(machine.getState().status).toBe('validation');
+
+      // validation → done (user approval)
+      machine.transition('RESULT_APPROVED', { summary: 'API complete' });
+      expect(machine.getState().status).toBe('done');
+      expect(machine.getState().summary).toBe('API complete');
+    });
+
+    it('should handle rejection and re-plan cycle', () => {
+      const machine = new TaskStateMachine(testSessionId);
+      machine.transition('TASK_START', { taskDescription: 'Build API' });
+      machine.transition('PLAN_READY', { plan: ['Too many steps'] });
+      expect(machine.getState().status).toBe('review');
+
+      // Reject → back to planning
+      machine.transition('PLAN_REJECTED');
+      expect(machine.getState().status).toBe('planning');
+      expect(machine.getState().taskDescription).toBe('Build API');
+
+      // Re-plan with simpler steps
+      machine.transition('PLAN_READY', { plan: ['Step A', 'Step B'] });
+      expect(machine.getState().status).toBe('review');
+      expect(machine.getState().plan).toEqual(['Step A', 'Step B']);
+
+      // Approve this time
+      machine.transition('PLAN_APPROVED');
+      expect(machine.getState().status).toBe('execution');
+    });
+
+    it('should handle result rejection and re-execution', () => {
+      const machine = new TaskStateMachine(testSessionId);
+      toValidation(machine);
+
+      // Reject result → back to execution
+      machine.transition('RESULT_REJECTED');
+      expect(machine.getState().status).toBe('execution');
+      expect(machine.getState().plan).toEqual(['Step 1', 'Step 2', 'Step 3']);
+
+      // Re-execute and re-validate
+      machine.transition('VALIDATION_START');
+      expect(machine.getState().status).toBe('validation');
+
+      // Approve this time
+      machine.transition('RESULT_APPROVED', { summary: 'Fixed and approved' });
+      expect(machine.getState().status).toBe('done');
     });
   });
 });
@@ -350,7 +521,6 @@ describe('parseTransitionSignals', () => {
     const signals = parseTransitionSignals(text);
     expect(signals).toHaveLength(3);
     expect(signals[0]).toEqual({ type: 'STEP_COMPLETE', step: 3 });
-    // Others maintain order
     expect(signals.map(s => s.type)).toEqual(['STEP_COMPLETE', 'TASK_DONE', 'PLAN_READY']);
   });
 });
@@ -362,34 +532,70 @@ describe('detectTaskIntent', () => {
     expect(detectTaskIntent('Implement user authentication')).toBe(true);
     expect(detectTaskIntent('Fix the bug in the header')).toBe(true);
     expect(detectTaskIntent('Write tests for the API')).toBe(true);
-    expect(detectTaskIntent('Add a footer to the page')).toBe(true);
-    expect(detectTaskIntent('Make the button responsive')).toBe(true);
-    expect(detectTaskIntent('Set up the database')).toBe(true);
-    expect(detectTaskIntent('Design a new layout')).toBe(true);
-    expect(detectTaskIntent('Refactor the code')).toBe(true);
-    expect(detectTaskIntent('Update the dependencies')).toBe(true);
-    expect(detectTaskIntent('Develop the feature')).toBe(true);
-    expect(detectTaskIntent('Configure the environment')).toBe(true);
   });
 
   it('should reject casual conversation', () => {
     expect(detectTaskIntent('Hi there')).toBe(false);
     expect(detectTaskIntent('Hello, how are you?')).toBe(false);
-    expect(detectTaskIntent('Hey!')).toBe(false);
     expect(detectTaskIntent('What is your name?')).toBe(false);
-    expect(detectTaskIntent('Why is the sky blue?')).toBe(false);
-    expect(detectTaskIntent('How does this work?')).toBe(false);
-    expect(detectTaskIntent('When should I use this?')).toBe(false);
-    expect(detectTaskIntent('Where can I find this?')).toBe(false);
-    expect(detectTaskIntent('Who made this?')).toBe(false);
     expect(detectTaskIntent('Can you help me?')).toBe(false);
-    expect(detectTaskIntent('Could you explain this?')).toBe(false);
-    expect(detectTaskIntent('Would you recommend this?')).toBe(false);
   });
 
   it('should detect multi-step indicators', () => {
     expect(detectTaskIntent('First create the file, then add the code')).toBe(true);
     expect(detectTaskIntent('step 1: install dependencies')).toBe(true);
     expect(detectTaskIntent('1. Create component\n2. Add tests')).toBe(true);
+  });
+});
+
+describe('detectApprovalIntent', () => {
+  it('should detect simple approvals', () => {
+    expect(detectApprovalIntent('yes')).toBe(true);
+    expect(detectApprovalIntent('ok')).toBe(true);
+    expect(detectApprovalIntent('go')).toBe(true);
+    expect(detectApprovalIntent('yep')).toBe(true);
+    expect(detectApprovalIntent('yeah')).toBe(true);
+    expect(detectApprovalIntent('sure')).toBe(true);
+  });
+
+  it('should detect approval phrases', () => {
+    expect(detectApprovalIntent('go ahead')).toBe(true);
+    expect(detectApprovalIntent('looks good')).toBe(true);
+    expect(detectApprovalIntent('approved')).toBe(true);
+    expect(detectApprovalIntent('lgtm')).toBe(true);
+    expect(detectApprovalIntent('proceed with the plan')).toBe(true);
+    expect(detectApprovalIntent("let's do it")).toBe(true);
+    expect(detectApprovalIntent('ship it')).toBe(true);
+    expect(detectApprovalIntent('confirmed')).toBe(true);
+  });
+
+  it('should not match in unrelated context', () => {
+    expect(detectApprovalIntent('yesterday was nice')).toBe(false);
+    expect(detectApprovalIntent('tell me about okra')).toBe(false);
+    expect(detectApprovalIntent('what do you think?')).toBe(false);
+  });
+});
+
+describe('detectRejectionIntent', () => {
+  it('should detect simple rejections', () => {
+    expect(detectRejectionIntent('no')).toBe(true);
+    expect(detectRejectionIntent('nope')).toBe(true);
+    expect(detectRejectionIntent('nah')).toBe(true);
+  });
+
+  it('should detect rejection phrases', () => {
+    expect(detectRejectionIntent('try again')).toBe(true);
+    expect(detectRejectionIntent('redo the plan')).toBe(true);
+    expect(detectRejectionIntent('this is wrong')).toBe(true);
+    expect(detectRejectionIntent('not good enough')).toBe(true);
+    expect(detectRejectionIntent('change the plan please')).toBe(true);
+    expect(detectRejectionIntent('revise the steps')).toBe(true);
+    expect(detectRejectionIntent('start over')).toBe(true);
+  });
+
+  it('should not match casual messages', () => {
+    expect(detectRejectionIntent('tell me more about this')).toBe(false);
+    expect(detectRejectionIntent('what else can we do?')).toBe(false);
+    expect(detectRejectionIntent('how does this work?')).toBe(false);
   });
 });

@@ -82,23 +82,29 @@ export default function ChatMessage({ message }: ChatMessageProps) {
 
   // Assistant message with markdown rendering
   const components: Components = {
-    code({ inline, className, children, ...props }: any) {
-      if (inline) {
+    pre({ children, ...props }: any) {
+      return (
+        <pre className="overflow-x-auto rounded-lg bg-gray-900 p-4" {...props}>
+          {children}
+        </pre>
+      );
+    },
+    code({ className, children, ...props }: any) {
+      const isBlock = className?.startsWith('language-');
+      if (isBlock) {
         return (
-          <code
-            className="rounded bg-gray-800 text-gray-100 px-1.5 py-0.5 text-sm"
-            {...props}
-          >
+          <code className={`text-gray-100 text-sm ${className}`} {...props}>
             {children}
           </code>
         );
       }
       return (
-        <pre className="overflow-x-auto rounded-lg bg-gray-900 p-4">
-          <code className={`text-gray-100 text-sm ${className ?? ''}`} {...props}>
-            {children}
-          </code>
-        </pre>
+        <code
+          className="rounded bg-gray-800 text-gray-100 px-1.5 py-0.5 text-sm"
+          {...props}
+        >
+          {children}
+        </code>
       );
     },
   };

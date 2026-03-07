@@ -40,9 +40,18 @@ export interface SessionMetrics {
   exchanges: number;
 }
 
+export interface TaskStateMetrics {
+  status: TaskStatus;
+  currentStep: number;
+  planLength: number;
+  paused: boolean;
+  needsApproval: boolean;
+}
+
 export interface Metrics {
   lastRequest: LastRequestMetrics;
   session: SessionMetrics;
+  taskState?: TaskStateMetrics;
 }
 
 // Memory layer types
@@ -109,7 +118,7 @@ export interface Invariant {
 
 // Task State Machine types
 
-export type TaskStatus = 'idle' | 'planning' | 'execution' | 'validation' | 'done' | 'failed';
+export type TaskStatus = 'idle' | 'planning' | 'review' | 'execution' | 'validation' | 'done' | 'failed';
 
 export interface StepResult {
   step: number;

@@ -5,16 +5,21 @@ import { getTaskState, saveTaskState, deleteTaskState } from '@/lib/db';
 type TransitionSignal =
   | 'TASK_START'
   | 'PLAN_READY'
+  | 'PLAN_APPROVED'
+  | 'PLAN_REJECTED'
   | 'STEP_COMPLETE'
   | 'VALIDATION_START'
   | 'TASK_DONE'
-  | 'TASK_FAILED';
+  | 'TASK_FAILED'
+  | 'RESULT_APPROVED'
+  | 'RESULT_REJECTED';
 
 const VALID_TRANSITIONS: Record<TaskStatus, TransitionSignal[]> = {
   idle: ['TASK_START'],
   planning: ['PLAN_READY'],
+  review: ['PLAN_APPROVED', 'PLAN_REJECTED'],
   execution: ['STEP_COMPLETE', 'VALIDATION_START'],
-  validation: ['TASK_DONE', 'TASK_FAILED'],
+  validation: ['RESULT_APPROVED', 'RESULT_REJECTED'],
   done: ['TASK_START'],
   failed: ['TASK_START'],
 };
@@ -37,6 +42,7 @@ export interface ParsedSignal {
  */
 export class TaskStateMachine {
   private state: TaskState;
+  private lastBlockedSignal: { signal: string; fromState: string; reason: string } | null = null;
 
   constructor(sessionId: string) {
     const loaded = getTaskState(sessionId);
@@ -86,9 +92,18 @@ export class TaskStateMachine {
 
       case 'PLAN_READY':
         if (this.state.status !== 'planning') return false;
-        this.state.status = 'execution';
+        this.state.status = 'review';
         this.state.plan = payload?.plan ?? [];
+        this.state.currentStep = 0;
+        break;
+
+      case 'PLAN_APPROVED':
+        this.state.status = 'execution';
         this.state.currentStep = 1;
+        break;
+
+      case 'PLAN_REJECTED':
+        this.state.status = 'planning';
         break;
 
       case 'STEP_COMPLETE':
@@ -113,11 +128,31 @@ export class TaskStateMachine {
         this.state.status = 'failed';
         this.state.summary = payload?.summary ?? null;
         break;
+
+      case 'RESULT_APPROVED':
+        this.state.status = 'done';
+        this.state.summary = payload?.summary ?? 'Approved by user';
+        break;
+
+      case 'RESULT_REJECTED':
+        this.state.status = 'execution';
+        break;
     }
 
     this.state.updatedAt = new Date().toISOString();
     this.persist();
     return true;
+  }
+
+  /**
+   * Store a blocked signal for feedback in the next prompt
+   */
+  setBlockedSignal(signal: string): void {
+    this.lastBlockedSignal = {
+      signal,
+      fromState: this.state.status,
+      reason: `Signal [${signal}] is not valid from state "${this.state.status}"`,
+    };
   }
 
   /**
@@ -165,6 +200,16 @@ export class TaskStateMachine {
     }
 
     const parts: string[] = [];
+
+    // Blocked signal warning
+    if (this.lastBlockedSignal) {
+      parts.push(`\u26a0\ufe0f TRANSITION BLOCKED: Signal [${this.lastBlockedSignal.signal}] was rejected.`);
+      parts.push(`Current state: ${this.lastBlockedSignal.fromState}. ${this.lastBlockedSignal.reason}`);
+      parts.push('You must follow the correct lifecycle sequence.');
+      parts.push('');
+      this.lastBlockedSignal = null;
+    }
+
     const pausedSuffix = this.state.paused ? ' (PAUSED)' : '';
 
     if (this.state.status === 'planning') {
@@ -175,6 +220,21 @@ export class TaskStateMachine {
       parts.push('');
       parts.push('Create a concrete, numbered plan for this task.');
       parts.push('When your plan is ready, include [PLAN_READY] in your response.');
+    } else if (this.state.status === 'review') {
+      parts.push(`**Task Status**: Review \u2014 Awaiting Plan Approval${pausedSuffix}`);
+      if (this.state.taskDescription) {
+        parts.push(`**Task**: ${this.state.taskDescription}`);
+      }
+      parts.push('');
+      parts.push('**Proposed Plan**:');
+      this.state.plan.forEach((step, idx) => {
+        parts.push(`${idx + 1}. ${step}`);
+      });
+      parts.push('');
+      parts.push('The plan above is awaiting user approval.');
+      parts.push('- If the user approves, proceed with execution.');
+      parts.push('- If the user provides feedback or rejects, revise the plan incorporating their feedback.');
+      parts.push('- Do NOT begin execution until the plan is explicitly approved.');
     } else if (this.state.status === 'execution') {
       const totalSteps = this.state.plan.length;
       parts.push(`**Task Status**: Executing step ${this.state.currentStep} of ${totalSteps}${pausedSuffix}`);
@@ -203,13 +263,21 @@ export class TaskStateMachine {
       parts.push('Execute the current step. When complete, include [STEP_COMPLETE:N] where N is the step number.');
       parts.push('When all steps are done, include [VALIDATION_START].');
     } else if (this.state.status === 'validation') {
-      parts.push(`**Task Status**: Validation${pausedSuffix}`);
+      parts.push(`**Task Status**: Validation \u2014 Awaiting Result Approval${pausedSuffix}`);
       if (this.state.taskDescription) {
         parts.push(`**Task**: ${this.state.taskDescription}`);
       }
       parts.push('');
-      parts.push('Validate the completed task.');
-      parts.push('Include [TASK_DONE] if successful, or [TASK_FAILED] if validation fails.');
+      if (this.state.stepResults.length > 0) {
+        parts.push('**Completed Steps**:');
+        this.state.stepResults.forEach((r) => {
+          parts.push(`- Step ${r.step}: ${r.outcome} (${r.status})`);
+        });
+        parts.push('');
+      }
+      parts.push('Present your validation of the completed work to the user.');
+      parts.push('The user must approve the result before the task can be marked complete.');
+      parts.push('Do NOT emit [TASK_DONE] or [TASK_FAILED]. The user will decide.');
     }
 
     if (this.state.paused) {
@@ -303,4 +371,36 @@ export function detectTaskIntent(message: string): boolean {
   }
 
   return false;
+}
+
+/**
+ * Detect if a user message indicates approval/acceptance
+ */
+export function detectApprovalIntent(message: string): boolean {
+  const lower = message.toLowerCase().trim();
+  // Short exact matches
+  if (/^(yes|ok|yep|yeah|sure|go)$/i.test(lower)) return true;
+  // Phrase patterns
+  const patterns = [
+    /\bapproved?\b/, /\bgo ahead\b/, /\bproceed\b/, /\blet'?s do it\b/,
+    /\blooks good\b/, /\blgtm\b/, /\bstart\b/, /\bexecute\b/, /\bbegin\b/,
+    /\bdo it\b/, /\bconfirm(?:ed)?\b/, /\baccept\b/, /\bship it\b/,
+  ];
+  return patterns.some((p) => p.test(lower));
+}
+
+/**
+ * Detect if a user message indicates rejection/redo
+ */
+export function detectRejectionIntent(message: string): boolean {
+  const lower = message.toLowerCase().trim();
+  // Short exact matches
+  if (/^(no|nope|nah)$/i.test(lower)) return true;
+  // Phrase patterns
+  const patterns = [
+    /\breject(?:ed)?\b/, /\bredo\b/, /\btry again\b/, /\bnot good\b/,
+    /\bwrong\b/, /\bchange the plan\b/, /\brevise\b/, /\brethink\b/,
+    /\bstart over\b/, /\bbad\b/,
+  ];
+  return patterns.some((p) => p.test(lower));
 }

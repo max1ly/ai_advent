@@ -1,6 +1,6 @@
 'use client';
 
-import type { Metrics, StrategyType, Branch } from '@/lib/types';
+import type { Metrics, StrategyType, Branch, TaskStatus } from '@/lib/types';
 
 interface MetricsDisplayProps {
   metrics: Metrics | null;
@@ -113,6 +113,20 @@ export default function MetricsDisplay({
         <span className="text-gray-400">Tokens: —</span>
       )}
 
+      {/* Task state indicator */}
+      {metrics?.taskState && metrics.taskState.status !== 'idle' && (
+        <>
+          <span className="text-gray-300">|</span>
+          <TaskStateIndicator
+            status={metrics.taskState.status}
+            currentStep={metrics.taskState.currentStep}
+            planLength={metrics.taskState.planLength}
+            paused={metrics.taskState.paused}
+            needsApproval={metrics.taskState.needsApproval}
+          />
+        </>
+      )}
+
       {/* Spacer pushes New Chat to the right */}
       <div className="flex-1" />
 
@@ -140,5 +154,48 @@ export default function MetricsDisplay({
         New Chat
       </button>
     </div>
+  );
+}
+
+const STATUS_CONFIG: Record<TaskStatus, { label: string; color: string; bgColor: string }> = {
+  idle: { label: 'Idle', color: 'text-gray-500', bgColor: 'bg-gray-100' },
+  planning: { label: 'Planning', color: 'text-blue-700', bgColor: 'bg-blue-50' },
+  review: { label: 'Review', color: 'text-amber-700', bgColor: 'bg-amber-50' },
+  execution: { label: 'Executing', color: 'text-green-700', bgColor: 'bg-green-50' },
+  validation: { label: 'Validating', color: 'text-purple-700', bgColor: 'bg-purple-50' },
+  done: { label: 'Done', color: 'text-emerald-700', bgColor: 'bg-emerald-50' },
+  failed: { label: 'Failed', color: 'text-red-700', bgColor: 'bg-red-50' },
+};
+
+function TaskStateIndicator({
+  status,
+  currentStep,
+  planLength,
+  paused,
+  needsApproval,
+}: {
+  status: TaskStatus;
+  currentStep: number;
+  planLength: number;
+  paused: boolean;
+  needsApproval: boolean;
+}) {
+  const config = STATUS_CONFIG[status];
+
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${config.color} ${config.bgColor}`}>
+      {needsApproval && (
+        <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+      )}
+      {paused && (
+        <span className="inline-block w-2 h-2 rounded-full bg-gray-400" />
+      )}
+      {config.label}
+      {status === 'execution' && planLength > 0 && (
+        <span className="text-[10px] opacity-75">
+          {currentStep}/{planLength}
+        </span>
+      )}
+    </span>
   );
 }
