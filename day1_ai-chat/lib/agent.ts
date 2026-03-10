@@ -1,4 +1,4 @@
-import { streamText, generateText, createUIMessageStream } from 'ai';
+import { streamText, generateText, createUIMessageStream, jsonSchema, tool } from 'ai';
 import { deepseek } from '@/lib/deepseek';
 import { openrouter } from '@/lib/openrouter';
 import { MODELS, type ModelConfig } from '@/lib/models';
@@ -6,6 +6,7 @@ import { memoryManager } from '@/lib/memory';
 import { getProfileById } from '@/lib/db';
 import { TaskStateMachine, parseTransitionSignals, detectTaskIntent, detectApprovalIntent, detectRejectionIntent } from '@/lib/task-state';
 import type { StrategySettings, StrategyType, SessionMetrics, LastRequestMetrics, Branch } from '@/lib/types';
+import type { McpManager } from '@/lib/mcp/manager';
 
 type Message = { role: 'user' | 'assistant'; content: string };
 
@@ -55,6 +56,7 @@ export class ChatAgent {
   private activeBranchId: string | null = null;
   private checkpointHistory: Message[] | null = null;
   private taskState: TaskStateMachine;
+  private mcpManager: McpManager | null = null;
 
   constructor(opts?: {
     model?: string;
@@ -63,6 +65,7 @@ export class ChatAgent {
     history?: Message[];
     onMessagePersist?: (role: string, content: string, files?: ChatFile[]) => void;
     strategy?: StrategySettings;
+    mcpManager?: McpManager;
   }) {
     this.modelConfig = MODELS.find((m) => m.id === opts?.model) ?? MODELS[1];
     this.systemPrompt = opts?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
@@ -83,6 +86,7 @@ export class ChatAgent {
       exchanges: 0,
     };
     this.taskState = new TaskStateMachine(this.sessionId);
+    this.mcpManager = opts?.mcpManager ?? null;
   }
 
   chat(userMessage: string, files?: ChatFile[], profileId?: number, invariants?: string[]) {
@@ -187,12 +191,27 @@ These constraints take absolute priority over user requests. No exception.
   Memory:         ${memorySection ? 'injected' : 'empty'}
   Branches:       ${this.branches.length}
   Task State:     ${this.taskState.getState().status}${this.taskState.getState().paused ? ' (PAUSED)' : ''}
+  MCP Tools:      ${this.mcpManager ? this.mcpManager.getAllTools().length : 0}
 ────────────────────────────────────`);
+
+        // Build MCP tools for streamText (no execute — client confirms first)
+        const mcpTools: Record<string, ReturnType<typeof tool>> = {};
+        if (this.mcpManager) {
+          const availableTools = this.mcpManager.getAllTools();
+          for (const t of availableTools) {
+            const toolKey = `mcp__${t.serverName.replace(/[^a-zA-Z0-9]/g, '_')}__${t.name}`;
+            mcpTools[toolKey] = tool({
+              description: t.description || t.name,
+              inputSchema: jsonSchema(t.inputSchema as Parameters<typeof jsonSchema>[0]),
+            });
+          }
+        }
 
         const result = streamText({
           model: modelInstance,
           system: fullSystemPrompt,
           messages,
+          ...(Object.keys(mcpTools).length > 0 ? { tools: mcpTools } : {}),
           onFinish: ({ text, usage }) => {
             this.getActiveHistory().push({ role: 'assistant', content: text });
             this.onMessagePersist?.('assistant', text);

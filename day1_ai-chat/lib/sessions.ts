@@ -2,6 +2,7 @@ import { ChatAgent } from '@/lib/agent';
 import { saveMessage, getSessionMessages, saveFile } from '@/lib/db';
 import type { ChatFile } from '@/lib/agent';
 import type { StrategySettings } from '@/lib/types';
+import { mcpManager } from '@/lib/mcp/manager';
 
 const sessions = new Map<string, ChatAgent>();
 
@@ -33,6 +34,7 @@ export function getOrCreateAgent(
     sessionId: sid,
     history,
     strategy,
+    mcpManager,
     onMessagePersist: (role: string, content: string, files?: ChatFile[]) => {
       const messageId = saveMessage(sid, role, content, model);
       if (files?.length) {

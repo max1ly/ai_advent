@@ -137,3 +137,56 @@ export interface TaskState {
   summary: string | null;
   updatedAt: string;
 }
+
+// MCP (Model Context Protocol) types
+
+export type McpTransport = 'stdio' | 'sse';
+
+export interface McpStdioConfig {
+  command: string;
+  args: string[];
+  env?: Record<string, string>;
+}
+
+export interface McpSseConfig {
+  url: string;
+  headers?: Record<string, string>;
+}
+
+export interface McpServer {
+  id: string;
+  name: string;
+  transport: McpTransport;
+  config: McpStdioConfig | McpSseConfig;
+  enabled: boolean;
+  createdAt: string;
+}
+
+export interface McpServerStatus extends McpServer {
+  status: 'connected' | 'disconnected' | 'error';
+  error?: string;
+  tools: McpTool[];
+}
+
+export interface McpTool {
+  name: string;
+  description?: string;
+  inputSchema: Record<string, unknown>;
+  serverId: string;
+  serverName: string;
+}
+
+export interface McpToolCallRequest {
+  serverId: string;
+  serverName: string;
+  toolName: string;
+  args: Record<string, unknown>;
+  callId: string;
+}
+
+export interface McpToolResult {
+  callId: string;
+  result?: unknown;
+  error?: string;
+  isError: boolean;
+}

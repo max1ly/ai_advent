@@ -9,8 +9,10 @@ import ModelSelector from './components/ModelSelector';
 import MetricsDisplay from './components/MetricsDisplay';
 import MemoryDialog from './components/MemoryDialog';
 import InvariantsDialog from './components/InvariantsDialog';
+import McpSettingsDialog from './components/McpSettingsDialog';
+import ToolConfirmDialog from './components/ToolConfirmDialog';
 import ProfileBar from './components/ProfileBar';
-import type { Metrics, StrategyType, Branch, Invariant } from '@/lib/types';
+import type { Metrics, StrategyType, Branch, Invariant, McpToolCallRequest } from '@/lib/types';
 import type { DisplayMessage, FileAttachment } from '@/lib/types';
 import { DEFAULT_MODEL } from '@/lib/models';
 
@@ -44,8 +46,10 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true);
   const [isMemoryOpen, setIsMemoryOpen] = useState(false);
   const [isInvariantsOpen, setIsInvariantsOpen] = useState(false);
+  const [isMcpOpen, setIsMcpOpen] = useState(false);
   const [invariants, setInvariants] = useState<Invariant[]>([]);
   const [profileId, setProfileId] = useState<number | null>(null);
+  const [pendingToolCall, setPendingToolCall] = useState<McpToolCallRequest | null>(null);
 
   const handleMemoryOpen = useCallback(() => setIsMemoryOpen(true), []);
 
@@ -337,6 +341,19 @@ export default function Home() {
               });
             } else if (event.type === 'data-metrics') {
               setMetrics(event.data as Metrics);
+            } else if (event.type === 'tool-input-available') {
+              // LLM wants to call an MCP tool — show confirmation
+              const toolNameStr = event.toolName as string;
+              const nameParts = toolNameStr.match(/^mcp__(.+?)__(.+)$/);
+              if (nameParts) {
+                setPendingToolCall({
+                  callId: event.toolCallId as string,
+                  serverId: '', // resolved server-side by tool name
+                  serverName: nameParts[1].replace(/_/g, ' '),
+                  toolName: nameParts[2],
+                  args: (event.input ?? {}) as Record<string, unknown>,
+                });
+              }
             } else if (event.type === 'error') {
               const errorText = event.errorText || event.error || 'Unknown API error';
               setError(new Error(errorText));
@@ -359,6 +376,50 @@ export default function Home() {
     [input, model, status, pendingFiles, strategy, windowSize, profileId, invariants],
   );
 
+  const handleToolAllow = useCallback(async () => {
+    if (!pendingToolCall) return;
+    const toolCall = pendingToolCall;
+    setPendingToolCall(null);
+    try {
+      const res = await fetch('/api/mcp/tools/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          serverId: toolCall.serverId,
+          toolName: toolCall.toolName,
+          args: toolCall.args,
+          callId: toolCall.callId,
+        }),
+      });
+      const data = await res.json();
+      const resultText = data.isError
+        ? `Tool error: ${data.error}`
+        : typeof data.result === 'string'
+          ? data.result
+          : JSON.stringify(data.result, null, 2);
+      const toolResultMsg: DisplayMessage = {
+        id: String(++msgCounterRef.current),
+        role: 'assistant',
+        content: `**[Tool Result: ${toolCall.toolName}]**\n\`\`\`\n${resultText}\n\`\`\``,
+      };
+      setMessages((prev) => [...prev, toolResultMsg]);
+    } catch (err) {
+      console.error('[MCP] Tool execution failed:', err);
+    }
+  }, [pendingToolCall]);
+
+  const handleToolDeny = useCallback(() => {
+    if (!pendingToolCall) return;
+    const toolCall = pendingToolCall;
+    setPendingToolCall(null);
+    const denialMsg: DisplayMessage = {
+      id: String(++msgCounterRef.current),
+      role: 'assistant',
+      content: `*Tool call denied: ${toolCall.toolName}*`,
+    };
+    setMessages((prev) => [...prev, denialMsg]);
+  }, [pendingToolCall]);
+
   const handleRetry = useCallback(() => {
     setError(null);
     setMessages((prev) => {
@@ -374,7 +435,22 @@ export default function Home() {
       {/* Header */}
       <header className="shadow-sm bg-white px-4 py-3 space-y-2">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-medium tracking-tight text-gray-800">Chat MAX</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-medium tracking-tight text-gray-800">Chat MAX</h1>
+            <button
+              onClick={() => setIsMcpOpen(true)}
+              className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+              title="MCP Servers"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2v5" />
+                <path d="M6 7h12" />
+                <path d="M8 7v4a4 4 0 0 0 8 0V7" />
+                <path d="M12 15v4" />
+                <path d="M8 19h8" />
+              </svg>
+            </button>
+          </div>
           <ModelSelector value={model} onChange={handleModelChange} />
         </div>
         <MetricsDisplay
@@ -399,6 +475,17 @@ export default function Home() {
 
       {/* Messages area */}
       <ChatContainer messages={messages} status={status} />
+
+      {/* Tool confirmation */}
+      {pendingToolCall && (
+        <div className="px-4 py-2">
+          <ToolConfirmDialog
+            request={pendingToolCall}
+            onAllow={handleToolAllow}
+            onDeny={handleToolDeny}
+          />
+        </div>
+      )}
 
       {/* Error banner */}
       {error && <ErrorMessage error={error} onRetry={handleRetry} />}
@@ -426,6 +513,11 @@ export default function Home() {
         onClose={() => setIsInvariantsOpen(false)}
         invariants={invariants}
         onUpdate={handleInvariantsUpdate}
+      />
+
+      <McpSettingsDialog
+        isOpen={isMcpOpen}
+        onClose={() => setIsMcpOpen(false)}
       />
     </div>
   );

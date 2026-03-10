@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'fs';
 import { join } from 'path';
@@ -92,6 +93,15 @@ function createDatabase(): Database.Database {
       step_results TEXT NOT NULL DEFAULT '[]',
       summary TEXT,
       updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS mcp_servers (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      transport TEXT NOT NULL CHECK(transport IN ('stdio', 'sse')),
+      config TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now'))
     );
   `);
 
@@ -334,4 +344,70 @@ export function saveTaskState(state: TaskState): void {
 
 export function deleteTaskState(sessionId: string): void {
   db.prepare('DELETE FROM task_state WHERE session_id = ?').run(sessionId);
+}
+
+// --- MCP Servers ---
+
+export type McpServerRow = {
+  id: string;
+  name: string;
+  transport: string;
+  config: string;
+  enabled: number;
+  created_at: string;
+};
+
+export function getMcpServers(): McpServerRow[] {
+  return db.prepare(
+    'SELECT id, name, transport, config, enabled, created_at FROM mcp_servers ORDER BY created_at',
+  ).all() as McpServerRow[];
+}
+
+export function getMcpServer(id: string): McpServerRow | null {
+  const row = db.prepare(
+    'SELECT id, name, transport, config, enabled, created_at FROM mcp_servers WHERE id = ?',
+  ).get(id) as McpServerRow | undefined;
+  return row ?? null;
+}
+
+export function createMcpServer(name: string, transport: string, config: string): string {
+  const id = crypto.randomUUID();
+  db.prepare(
+    'INSERT INTO mcp_servers (id, name, transport, config) VALUES (?, ?, ?, ?)',
+  ).run(id, name, transport, config);
+  return id;
+}
+
+export function updateMcpServer(
+  id: string,
+  updates: { name?: string; transport?: string; config?: string; enabled?: number },
+): void {
+  const setClauses: string[] = [];
+  const values: (string | number)[] = [];
+
+  if (updates.name !== undefined) {
+    setClauses.push('name = ?');
+    values.push(updates.name);
+  }
+  if (updates.transport !== undefined) {
+    setClauses.push('transport = ?');
+    values.push(updates.transport);
+  }
+  if (updates.config !== undefined) {
+    setClauses.push('config = ?');
+    values.push(updates.config);
+  }
+  if (updates.enabled !== undefined) {
+    setClauses.push('enabled = ?');
+    values.push(updates.enabled);
+  }
+
+  if (setClauses.length === 0) return;
+
+  values.push(id);
+  db.prepare(`UPDATE mcp_servers SET ${setClauses.join(', ')} WHERE id = ?`).run(...values);
+}
+
+export function deleteMcpServer(id: string): void {
+  db.prepare('DELETE FROM mcp_servers WHERE id = ?').run(id);
 }
