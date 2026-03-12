@@ -52,17 +52,17 @@ describe('Cat Facts MCP Server (SSE integration)', () => {
     }
   });
 
-  it('connects and lists 2 tools', async () => {
+  it('connects and lists 3 tools', async () => {
     const config: McpSseConfig = { url: SSE_URL };
     client = new McpClientWrapper('cat-test', 'Cat Facts', 'sse', config);
 
     const tools = await client.connect();
 
     expect(client.getStatus()).toBe('connected');
-    expect(tools).toHaveLength(2);
+    expect(tools).toHaveLength(3);
 
     const toolNames = tools.map((t) => t.name).sort();
-    expect(toolNames).toEqual(['cat_facts_list', 'random_cat_fact']);
+    expect(toolNames).toEqual(['cat_facts_list', 'get_cat_facts_summary', 'random_cat_fact']);
 
     // Verify tool metadata
     const randomFact = tools.find((t) => t.name === 'random_cat_fact')!;
@@ -90,6 +90,28 @@ describe('Cat Facts MCP Server (SSE integration)', () => {
     expect(typeof parsed.length).toBe('number');
 
     console.log('Random cat fact:', parsed.fact);
+  }, 15000);
+
+  it('calls get_cat_facts_summary and returns stats', async () => {
+    const config: McpSseConfig = { url: SSE_URL };
+    client = new McpClientWrapper('cat-test', 'Cat Facts', 'sse', config);
+    await client.connect();
+
+    const result = await client.callTool('get_cat_facts_summary', {});
+    expect(result).toBeDefined();
+
+    const content = (result as { content: Array<{ type: string; text: string }> }).content;
+    expect(content).toHaveLength(1);
+    expect(content[0].type).toBe('text');
+
+    const parsed = JSON.parse(content[0].text);
+    expect(typeof parsed.facts_collected).toBe('number');
+    expect(typeof parsed.unique_facts).toBe('number');
+    expect(typeof parsed.avg_length).toBe('number');
+    expect(typeof parsed.longest_fact_length).toBe('number');
+    expect(typeof parsed.shortest_fact_length).toBe('number');
+
+    console.log('Cat facts summary:', parsed);
   }, 15000);
 
   it('calls cat_facts_list with limit', async () => {

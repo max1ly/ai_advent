@@ -3,6 +3,62 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { createServer } from 'node:http';
 import { z } from 'zod';
+import Database from 'better-sqlite3';
+import { mkdirSync } from 'fs';
+import { join } from 'path';
+
+// --- SQLite setup (reuse existing chat.db) ---
+const dataDir = join(process.cwd(), 'data');
+mkdirSync(dataDir, { recursive: true });
+
+const db = new Database(join(dataDir, 'chat.db'));
+db.pragma('journal_mode = WAL');
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS cat_facts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fact TEXT UNIQUE NOT NULL,
+    length INTEGER NOT NULL,
+    collected_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
+console.log('\x1b[35m[Cat Facts MCP]\x1b[0m SQLite table ready (cat_facts)');
+
+const insertFact = db.prepare(
+  'INSERT OR IGNORE INTO cat_facts (fact, length) VALUES (?, ?)',
+);
+
+const summaryQuery = db.prepare(`
+  SELECT
+    COUNT(*) as facts_collected,
+    COUNT(DISTINCT fact) as unique_facts,
+    COALESCE(ROUND(AVG(length)), 0) as avg_length,
+    COALESCE(MAX(length), 0) as longest_fact_length,
+    COALESCE(MIN(length), 0) as shortest_fact_length,
+    MAX(collected_at) as last_collected_at
+  FROM cat_facts
+`);
+
+// --- Scheduler: fetch a random cat fact every 15 seconds ---
+async function collectFact(): Promise<void> {
+  try {
+    const res = await fetch('https://catfact.ninja/fact');
+    if (!res.ok) {
+      console.error(`\x1b[35m[Cat Facts MCP]\x1b[0m Scheduler fetch failed: ${res.status}`);
+      return;
+    }
+    const data = (await res.json()) as { fact: string; length: number };
+    const result = insertFact.run(data.fact, data.length);
+    if (result.changes > 0) {
+      console.log(`\x1b[35m[Cat Facts MCP]\x1b[0m Collected new fact (${data.length} chars)`);
+    } else {
+      console.log(`\x1b[35m[Cat Facts MCP]\x1b[0m Duplicate fact skipped`);
+    }
+  } catch (err) {
+    console.error(`\x1b[35m[Cat Facts MCP]\x1b[0m Scheduler error:`, err);
+  }
+}
 
 /**
  * Create a new McpServer instance with tools registered.
@@ -49,6 +105,25 @@ function createMcpServer(): McpServer {
       const data = (await res.json()) as { data: Array<{ fact: string; length: number }> };
       return {
         content: [{ type: 'text', text: JSON.stringify({ facts: data.data, count: data.data.length }) }],
+      };
+    },
+  );
+
+  // Tool 3: get_cat_facts_summary — returns aggregated statistics
+  server.tool(
+    'get_cat_facts_summary',
+    'Get aggregated statistics about collected cat facts (count, unique, avg/min/max length)',
+    async () => {
+      const row = summaryQuery.get() as {
+        facts_collected: number;
+        unique_facts: number;
+        avg_length: number;
+        longest_fact_length: number;
+        shortest_fact_length: number;
+        last_collected_at: string | null;
+      };
+      return {
+        content: [{ type: 'text', text: JSON.stringify(row) }],
       };
     },
   );
@@ -119,5 +194,10 @@ const httpServer = createServer(async (req, res) => {
 httpServer.listen(PORT, () => {
   console.log(`\x1b[35m[Cat Facts MCP]\x1b[0m Server running on http://localhost:${PORT}`);
   console.log(`\x1b[35m[Cat Facts MCP]\x1b[0m SSE endpoint: http://localhost:${PORT}/sse`);
-  console.log(`\x1b[35m[Cat Facts MCP]\x1b[0m Tools: random_cat_fact, cat_facts_list`);
+  console.log(`\x1b[35m[Cat Facts MCP]\x1b[0m Tools: random_cat_fact, cat_facts_list, get_cat_facts_summary`);
+
+  // Start periodic collection
+  collectFact(); // initial fetch immediately
+  setInterval(collectFact, 15_000);
+  console.log(`\x1b[35m[Cat Facts MCP]\x1b[0m Scheduler started (every 15s)`);
 });

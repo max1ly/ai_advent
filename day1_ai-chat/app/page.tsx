@@ -11,7 +11,6 @@ import MemoryDialog from './components/MemoryDialog';
 import InvariantsDialog from './components/InvariantsDialog';
 import McpSettingsDialog from './components/McpSettingsDialog';
 import ToolConfirmDialog from './components/ToolConfirmDialog';
-import ProfileBar from './components/ProfileBar';
 import type { Metrics, StrategyType, Branch, Invariant, McpToolCallRequest } from '@/lib/types';
 import type { DisplayMessage, FileAttachment } from '@/lib/types';
 import { DEFAULT_MODEL } from '@/lib/models';
@@ -48,7 +47,6 @@ export default function Home() {
   const [isInvariantsOpen, setIsInvariantsOpen] = useState(false);
   const [isMcpOpen, setIsMcpOpen] = useState(false);
   const [invariants, setInvariants] = useState<Invariant[]>([]);
-  const [profileId, setProfileId] = useState<number | null>(null);
   const [pendingToolCall, setPendingToolCall] = useState<McpToolCallRequest | null>(null);
 
   const handleMemoryOpen = useCallback(() => setIsMemoryOpen(true), []);
@@ -68,8 +66,6 @@ export default function Home() {
     if (savedStrategy) setStrategy(savedStrategy);
     const savedWindowSize = localStorage.getItem('chat-window-size');
     if (savedWindowSize) setWindowSize(parseInt(savedWindowSize) || 10);
-    const savedProfileId = localStorage.getItem('chat-profile-id');
-    if (savedProfileId) setProfileId(parseInt(savedProfileId) || null);
   }, []);
 
   useEffect(() => {
@@ -129,15 +125,6 @@ export default function Home() {
   const handleWindowSizeChange = useCallback((size: number) => {
     setWindowSize(size);
     localStorage.setItem('chat-window-size', String(size));
-  }, []);
-
-  const handleProfileChange = useCallback((id: number | null) => {
-    setProfileId(id);
-    if (id) {
-      localStorage.setItem('chat-profile-id', String(id));
-    } else {
-      localStorage.removeItem('chat-profile-id');
-    }
   }, []);
 
   const handleNewChat = useCallback(async () => {
@@ -292,7 +279,6 @@ export default function Home() {
             files: filesPayload.length > 0 ? filesPayload : undefined,
             strategy,
             windowSize,
-            profileId,
             invariants: invariants.filter(inv => inv.enabled).map(inv => inv.text),
           }),
         });
@@ -373,7 +359,7 @@ export default function Home() {
         setStatus('ready');
       }
     },
-    [input, model, status, pendingFiles, strategy, windowSize, profileId, invariants],
+    [input, model, status, pendingFiles, strategy, windowSize, invariants],
   );
 
   const handleToolAllow = useCallback(async () => {
@@ -469,9 +455,6 @@ export default function Home() {
           invariantCount={invariants.filter(inv => inv.enabled).length}
         />
       </header>
-
-      {/* Profile selector */}
-      <ProfileBar selectedProfileId={profileId} onProfileChange={handleProfileChange} />
 
       {/* Messages area */}
       <ChatContainer messages={messages} status={status} />
