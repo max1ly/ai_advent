@@ -48,6 +48,7 @@ export default function Home() {
   const [isMcpOpen, setIsMcpOpen] = useState(false);
   const [invariants, setInvariants] = useState<Invariant[]>([]);
   const [pendingToolCall, setPendingToolCall] = useState<McpToolCallRequest | null>(null);
+  const toolChainDepthRef = useRef(0);
 
   const handleMemoryOpen = useCallback(() => setIsMemoryOpen(true), []);
 
@@ -220,11 +221,102 @@ export default function Home() {
     });
   }, []);
 
+  // Shared SSE stream handler — reads events and updates UI
+  const streamChatResponse = useCallback(async (res: Response) => {
+    const sid = res.headers.get('x-session-id');
+    if (sid) {
+      sessionIdRef.current = sid;
+      localStorage.setItem('chat-session-id', sid);
+      if (invariants.length > 0) {
+        localStorage.setItem(`invariants-${sid}`, JSON.stringify(invariants));
+      }
+    }
+
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let assistantText = '';
+
+    setStatus('streaming');
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop()!;
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
+        const event = JSON.parse(line.slice(6));
+        if (event.type !== 'text-delta') {
+          console.log('[SSE Event]', event.type, event);
+        }
+
+        if (event.type === 'text-delta') {
+          assistantText += event.delta;
+          setMessages((prev) => {
+            const updated = [...prev];
+            updated[updated.length - 1] = {
+              ...updated[updated.length - 1],
+              content: assistantText,
+            };
+            return updated;
+          });
+        } else if (event.type === 'data-metrics') {
+          setMetrics(event.data as Metrics);
+        } else if (event.type === 'tool-input-available') {
+          // LLM wants to call an MCP tool — show confirmation
+          const toolNameStr = event.toolName as string;
+          const nameParts = toolNameStr.match(/^mcp__(.+?)__(.+)$/);
+          if (nameParts) {
+            setPendingToolCall({
+              callId: event.toolCallId as string,
+              serverId: '', // resolved server-side by tool name
+              serverName: nameParts[1].replace(/_/g, ' '),
+              toolName: nameParts[2],
+              args: (event.input ?? {}) as Record<string, unknown>,
+            });
+          }
+        } else if (event.type === 'error') {
+          const errorText = event.errorText || event.error || 'Unknown API error';
+          setError(new Error(errorText));
+        }
+      }
+    }
+  }, [invariants]);
+
+  // Send a message to the LLM and stream the response
+  const sendAndStream = useCallback(async (text: string, opts?: { filesPayload?: Array<{ filename: string; mediaType: string; data: string }>; forceToolUse?: boolean }) => {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: text,
+        sessionId: sessionIdRef.current,
+        model,
+        files: opts?.filesPayload && opts.filesPayload.length > 0 ? opts.filesPayload : undefined,
+        strategy,
+        windowSize,
+        invariants: invariants.filter(inv => inv.enabled).map(inv => inv.text),
+        forceToolUse: opts?.forceToolUse,
+      }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Server error: ${res.status}`);
+    }
+
+    await streamChatResponse(res);
+  }, [model, strategy, windowSize, invariants, streamChatResponse]);
+
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
       const text = input.trim();
       if ((!text && pendingFiles.length === 0) || status !== 'ready') return;
+      toolChainDepthRef.current = 0;
 
       // Capture and clear pending files
       const filesToSend = [...pendingFiles];
@@ -269,83 +361,7 @@ export default function Home() {
           })),
         );
 
-        const res = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: text,
-            sessionId: sessionIdRef.current,
-            model,
-            files: filesPayload.length > 0 ? filesPayload : undefined,
-            strategy,
-            windowSize,
-            invariants: invariants.filter(inv => inv.enabled).map(inv => inv.text),
-          }),
-        });
-
-        if (!res.ok) {
-          throw new Error(`Server error: ${res.status}`);
-        }
-
-        const sid = res.headers.get('x-session-id');
-        if (sid) {
-          sessionIdRef.current = sid;
-          localStorage.setItem('chat-session-id', sid);
-          if (invariants.length > 0) {
-            localStorage.setItem(`invariants-${sid}`, JSON.stringify(invariants));
-          }
-        }
-
-        const reader = res.body!.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let assistantText = '';
-
-        setStatus('streaming');
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop()!;
-
-          for (const line of lines) {
-            if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
-            const event = JSON.parse(line.slice(6));
-
-            if (event.type === 'text-delta') {
-              assistantText += event.delta;
-              setMessages((prev) => {
-                const updated = [...prev];
-                updated[updated.length - 1] = {
-                  ...updated[updated.length - 1],
-                  content: assistantText,
-                };
-                return updated;
-              });
-            } else if (event.type === 'data-metrics') {
-              setMetrics(event.data as Metrics);
-            } else if (event.type === 'tool-input-available') {
-              // LLM wants to call an MCP tool — show confirmation
-              const toolNameStr = event.toolName as string;
-              const nameParts = toolNameStr.match(/^mcp__(.+?)__(.+)$/);
-              if (nameParts) {
-                setPendingToolCall({
-                  callId: event.toolCallId as string,
-                  serverId: '', // resolved server-side by tool name
-                  serverName: nameParts[1].replace(/_/g, ' '),
-                  toolName: nameParts[2],
-                  args: (event.input ?? {}) as Record<string, unknown>,
-                });
-              }
-            } else if (event.type === 'error') {
-              const errorText = event.errorText || event.error || 'Unknown API error';
-              setError(new Error(errorText));
-            }
-          }
-        }
+        await sendAndStream(text, { filesPayload });
       } catch (err) {
         setError(err instanceof Error ? err : new Error(String(err)));
         setMessages((prev) => {
@@ -359,7 +375,7 @@ export default function Home() {
         setStatus('ready');
       }
     },
-    [input, model, status, pendingFiles, strategy, windowSize, invariants],
+    [input, model, status, pendingFiles, strategy, windowSize, invariants, sendAndStream],
   );
 
   const handleToolAllow = useCallback(async () => {
@@ -367,6 +383,7 @@ export default function Home() {
     const toolCall = pendingToolCall;
     setPendingToolCall(null);
     try {
+      // Execute the MCP tool
       const res = await fetch('/api/mcp/tools/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -383,16 +400,34 @@ export default function Home() {
         : typeof data.result === 'string'
           ? data.result
           : JSON.stringify(data.result, null, 2);
+
+      // Show tool result in UI
       const toolResultMsg: DisplayMessage = {
         id: String(++msgCounterRef.current),
         role: 'assistant',
         content: `**[Tool Result: ${toolCall.toolName}]**\n\`\`\`\n${resultText}\n\`\`\``,
       };
       setMessages((prev) => [...prev, toolResultMsg]);
+
+      // Feed result back to LLM so it can continue the pipeline
+      toolChainDepthRef.current++;
+      const shouldForceToolUse = toolChainDepthRef.current < 3;
+      const continuationMsg = `Tool "${toolCall.toolName}" returned:\n${resultText}\n\nIf there are remaining steps, call the next tool now.`;
+      const assistantMsg: DisplayMessage = {
+        id: String(++msgCounterRef.current),
+        role: 'assistant',
+        content: '',
+      };
+      setMessages((prev) => [...prev, assistantMsg]);
+      setStatus('submitted');
+
+      await sendAndStream(continuationMsg, { forceToolUse: shouldForceToolUse });
     } catch (err) {
       console.error('[MCP] Tool execution failed:', err);
+    } finally {
+      setStatus('ready');
     }
-  }, [pendingToolCall]);
+  }, [pendingToolCall, sendAndStream]);
 
   const handleToolDeny = useCallback(() => {
     if (!pendingToolCall) return;

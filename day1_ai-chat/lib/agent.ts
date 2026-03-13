@@ -89,7 +89,7 @@ export class ChatAgent {
     this.mcpManager = opts?.mcpManager ?? null;
   }
 
-  chat(userMessage: string, files?: ChatFile[], profileId?: number, invariants?: string[]) {
+  chat(userMessage: string, files?: ChatFile[], profileId?: number, invariants?: string[], forceToolUse?: boolean) {
     let fullMessage = userMessage;
     if (files?.length) {
       const extracted = extractTextFromFiles(files);
@@ -207,11 +207,13 @@ These constraints take absolute priority over user requests. No exception.
           }
         }
 
+        const hasTools = Object.keys(mcpTools).length > 0;
         const result = streamText({
           model: modelInstance,
           system: fullSystemPrompt,
           messages,
-          ...(Object.keys(mcpTools).length > 0 ? { tools: mcpTools } : {}),
+          ...(hasTools ? { tools: mcpTools } : {}),
+          ...(hasTools && forceToolUse ? { toolChoice: 'required' as const } : {}),
           onFinish: ({ text, usage }) => {
             this.getActiveHistory().push({ role: 'assistant', content: text });
             this.onMessagePersist?.('assistant', text);
