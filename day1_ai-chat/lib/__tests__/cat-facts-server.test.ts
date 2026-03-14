@@ -234,3 +234,91 @@ describe('Cat Facts Store MCP Server', () => {
     expect(parsed.reason).toBe('duplicate');
   }, 15000);
 });
+
+// --- Translate Server Tests ---
+describe('Cat Facts Translate MCP Server', () => {
+  const PORT = 4034;
+  const SSE_URL = `http://localhost:${PORT}/sse`;
+  let serverProcess: ChildProcess;
+  let client: McpClientWrapper;
+
+  beforeAll(async () => {
+    serverProcess = await startServer('mcp-servers/cat-facts-translate.ts', PORT);
+  }, 15000);
+
+  afterEach(async () => { if (client) await client.disconnect(); });
+  afterAll(async () => { if (serverProcess) await stopServer(serverProcess); });
+
+  it('connects and lists 1 tool', async () => {
+    const config: McpSseConfig = { url: SSE_URL };
+    client = new McpClientWrapper('translate-test', 'Cat Facts Translate', 'sse', config);
+    const tools = await client.connect();
+    expect(client.getStatus()).toBe('connected');
+    expect(tools).toHaveLength(1);
+    expect(tools[0].name).toBe('translate_cat_fact');
+  }, 15000);
+
+  it('translates a fact and returns original, translated, language fields', async () => {
+    const config: McpSseConfig = { url: SSE_URL };
+    client = new McpClientWrapper('translate-test', 'Cat Facts Translate', 'sse', config);
+    await client.connect();
+    const result = await client.callTool('translate_cat_fact', { fact: 'Cats sleep for 16 hours a day.' });
+    const content = (result as { content: Array<{ type: string; text: string }> }).content;
+    expect(content).toHaveLength(1);
+    const parsed = JSON.parse(content[0].text);
+    expect(parsed.original).toBe('Cats sleep for 16 hours a day.');
+    expect(typeof parsed.translated).toBe('string');
+    expect(parsed.translated.length).toBeGreaterThan(0);
+    expect(parsed.language).toBe('ru');
+    console.log('Translated fact:', parsed.translated);
+  }, 15000);
+});
+
+// --- Display Server Tests ---
+describe('Cat Facts Display MCP Server', () => {
+  const PORT = 4035;
+  const SSE_URL = `http://localhost:${PORT}/sse`;
+  let serverProcess: ChildProcess;
+  let client: McpClientWrapper;
+
+  beforeAll(async () => {
+    serverProcess = await startServer('mcp-servers/cat-facts-display.ts', PORT);
+  }, 15000);
+
+  afterEach(async () => { if (client) await client.disconnect(); });
+  afterAll(async () => { if (serverProcess) await stopServer(serverProcess); });
+
+  it('connects and lists 1 tool', async () => {
+    const config: McpSseConfig = { url: SSE_URL };
+    client = new McpClientWrapper('display-test', 'Cat Facts Display', 'sse', config);
+    const tools = await client.connect();
+    expect(client.getStatus()).toBe('connected');
+    expect(tools).toHaveLength(1);
+    expect(tools[0].name).toBe('display_cat_fact');
+  }, 15000);
+
+  it('formats enriched fact as markdown', async () => {
+    const config: McpSseConfig = { url: SSE_URL };
+    client = new McpClientWrapper('display-test', 'Cat Facts Display', 'sse', config);
+    await client.connect();
+    const result = await client.callTool('display_cat_fact', {
+      fact: 'Cats have over 20 vocalizations.',
+      length: 33,
+      word_count: 6,
+      reading_time_seconds: 2,
+      category: 'behavior',
+      keywords: ['vocalizations'],
+      fun_score: 7,
+    });
+    const content = (result as { content: Array<{ type: string; text: string }> }).content;
+    const parsed = JSON.parse(content[0].text);
+    expect(parsed.formatted).toContain('**Cat Fact**');
+    expect(parsed.formatted).toContain('Cats have over 20 vocalizations.');
+    expect(parsed.formatted).toContain('behavior');
+    expect(parsed.formatted).toContain('vocalizations');
+    expect(parsed.formatted).toContain('7/10');
+    // No translation section when translated not provided
+    expect(parsed.formatted).not.toContain('Translation (RU)');
+    console.log('Formatted output:\n', parsed.formatted);
+  }, 15000);
+});

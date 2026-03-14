@@ -21,7 +21,7 @@ db.pragma('journal_mode = WAL');
 // The new table adds: word_count, reading_time_seconds, category, keywords, fun_score
 const tableInfo = db.prepare("PRAGMA table_info('cat_facts')").all() as Array<{ name: string }>;
 const columnNames = tableInfo.map((c) => c.name);
-if (columnNames.length > 0 && !columnNames.includes('word_count')) {
+if (columnNames.length > 0 && !columnNames.includes('translated')) {
   console.log(`${TAG} Schema migration: dropping old cat_facts table (missing new columns)`);
   db.exec('DROP TABLE cat_facts');
 }
@@ -36,6 +36,7 @@ db.exec(`
     category TEXT NOT NULL,
     keywords TEXT NOT NULL,
     fun_score INTEGER NOT NULL,
+    translated TEXT,
     collected_at TEXT DEFAULT CURRENT_TIMESTAMP
   );
 `);
@@ -43,8 +44,8 @@ db.exec(`
 console.log(`${TAG} SQLite table ready (cat_facts)`);
 
 const insertFact = db.prepare(
-  `INSERT OR IGNORE INTO cat_facts (fact, length, word_count, reading_time_seconds, category, keywords, fun_score)
-   VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  `INSERT OR IGNORE INTO cat_facts (fact, length, word_count, reading_time_seconds, category, keywords, fun_score, translated)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 );
 
 const summaryQuery = db.prepare(`
@@ -56,7 +57,8 @@ const summaryQuery = db.prepare(`
     COALESCE(MIN(length), 0) as shortest_fact_length,
     COALESCE(ROUND(AVG(fun_score), 1), 0) as avg_fun_score,
     COALESCE(ROUND(AVG(reading_time_seconds)), 0) as avg_reading_time_seconds,
-    MAX(collected_at) as last_collected_at
+    MAX(collected_at) as last_collected_at,
+    COUNT(CASE WHEN translated IS NOT NULL THEN 1 END) as translated_count
   FROM cat_facts
 `);
 
@@ -84,9 +86,10 @@ function createMcpServer(): McpServer {
       category: z.string().describe('Detected category (anatomy, behavior, history, diet, senses, reproduction, other)'),
       keywords: z.array(z.string()).describe('Extracted keywords'),
       fun_score: z.number().describe('Fun score (1-10)'),
+      translated: z.string().optional().describe('Russian translation of the fact (optional)'),
     },
-    async ({ fact, length, word_count, reading_time_seconds, category, keywords, fun_score }) => {
-      const result = insertFact.run(fact, length, word_count, reading_time_seconds, category, JSON.stringify(keywords), fun_score);
+    async ({ fact, length, word_count, reading_time_seconds, category, keywords, fun_score, translated }) => {
+      const result = insertFact.run(fact, length, word_count, reading_time_seconds, category, JSON.stringify(keywords), fun_score, translated ?? null);
       if (result.changes > 0) {
         return {
           content: [{ type: 'text', text: JSON.stringify({ stored: true, id: result.lastInsertRowid }) }],
@@ -111,6 +114,7 @@ function createMcpServer(): McpServer {
         avg_fun_score: number;
         avg_reading_time_seconds: number;
         last_collected_at: string | null;
+        translated_count: number;
       };
       const categories = categoryBreakdownQuery.all() as Array<{ category: string; count: number }>;
       const category_breakdown: Record<string, number> = {};

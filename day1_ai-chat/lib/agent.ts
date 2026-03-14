@@ -207,6 +207,20 @@ These constraints take absolute priority over user requests. No exception.
           }
         }
 
+        // Add pipeline_complete tool so LLM can signal "done" even with toolChoice: required
+        if (forceToolUse) {
+          mcpTools['pipeline_complete'] = tool({
+            description: 'Call this when all steps the user requested are complete. Pass a brief summary of what was done.',
+            inputSchema: jsonSchema({
+              type: 'object',
+              properties: {
+                summary: { type: 'string', description: 'Brief summary of what was accomplished' },
+              },
+              required: ['summary'],
+            } as Parameters<typeof jsonSchema>[0]),
+          });
+        }
+
         const hasTools = Object.keys(mcpTools).length > 0;
         const result = streamText({
           model: modelInstance,

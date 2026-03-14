@@ -49,6 +49,7 @@ export default function Home() {
   const [invariants, setInvariants] = useState<Invariant[]>([]);
   const [pendingToolCall, setPendingToolCall] = useState<McpToolCallRequest | null>(null);
   const toolChainDepthRef = useRef(0);
+  const toolChainResultsRef = useRef<Array<{ tool: string; result: string }>>([]);
 
   const handleMemoryOpen = useCallback(() => setIsMemoryOpen(true), []);
 
@@ -250,10 +251,6 @@ export default function Home() {
       for (const line of lines) {
         if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
         const event = JSON.parse(line.slice(6));
-        if (event.type !== 'text-delta') {
-          console.log('[SSE Event]', event.type, event);
-        }
-
         if (event.type === 'text-delta') {
           assistantText += event.delta;
           setMessages((prev) => {
@@ -267,17 +264,36 @@ export default function Home() {
         } else if (event.type === 'data-metrics') {
           setMetrics(event.data as Metrics);
         } else if (event.type === 'tool-input-available') {
-          // LLM wants to call an MCP tool — show confirmation
           const toolNameStr = event.toolName as string;
-          const nameParts = toolNameStr.match(/^mcp__(.+?)__(.+)$/);
-          if (nameParts) {
-            setPendingToolCall({
-              callId: event.toolCallId as string,
-              serverId: '', // resolved server-side by tool name
-              serverName: nameParts[1].replace(/_/g, ' '),
-              toolName: nameParts[2],
-              args: (event.input ?? {}) as Record<string, unknown>,
-            });
+          // pipeline_complete is a signal tool — display summary, no confirmation needed
+          if (toolNameStr === 'pipeline_complete') {
+            const input = (event.input ?? {}) as { summary?: string };
+            if (input.summary) {
+              assistantText += input.summary;
+              setMessages((prev) => {
+                const updated = [...prev];
+                updated[updated.length - 1] = {
+                  ...updated[updated.length - 1],
+                  content: assistantText,
+                };
+                return updated;
+              });
+            }
+            toolChainDepthRef.current = 0;
+            toolChainResultsRef.current = [];
+          } else {
+            // LLM wants to call an MCP tool — show confirmation
+            const nameParts = toolNameStr.match(/^mcp__(.+?)__(.+)$/);
+            if (nameParts) {
+              const toolArgs = (event.input ?? {}) as Record<string, unknown>;
+              setPendingToolCall({
+                callId: event.toolCallId as string,
+                serverId: '', // resolved server-side by tool name
+                serverName: nameParts[1].replace(/_/g, ' '),
+                toolName: nameParts[2],
+                args: toolArgs,
+              });
+            }
           }
         } else if (event.type === 'error') {
           const errorText = event.errorText || event.error || 'Unknown API error';
@@ -317,6 +333,7 @@ export default function Home() {
       const text = input.trim();
       if ((!text && pendingFiles.length === 0) || status !== 'ready') return;
       toolChainDepthRef.current = 0;
+      toolChainResultsRef.current = [];
 
       // Capture and clear pending files
       const filesToSend = [...pendingFiles];
@@ -383,6 +400,32 @@ export default function Home() {
     const toolCall = pendingToolCall;
     setPendingToolCall(null);
     try {
+      // Enrich tool args with accumulated pipeline data
+      // This ensures fields like 'translated' from earlier steps get passed through
+      // even if the LLM forgets to include them
+      let enrichedArgs = { ...toolCall.args };
+      if (toolChainResultsRef.current.length > 0) {
+        let mergedPipelineData: Record<string, unknown> = {};
+        for (const r of toolChainResultsRef.current) {
+          try {
+            const parsed = JSON.parse(r.result);
+            let actualData = parsed;
+            if (parsed?.content?.[0]?.text) {
+              try { actualData = JSON.parse(parsed.content[0].text); } catch { /* not JSON */ }
+            }
+            if (typeof actualData === 'object' && actualData !== null) {
+              mergedPipelineData = { ...mergedPipelineData, ...actualData };
+            }
+          } catch { /* skip */ }
+        }
+        // Only fill in missing fields — don't override what the LLM explicitly set
+        for (const [key, value] of Object.entries(mergedPipelineData)) {
+          if (!(key in enrichedArgs)) {
+            enrichedArgs[key] = value;
+          }
+        }
+      }
+
       // Execute the MCP tool
       const res = await fetch('/api/mcp/tools/execute', {
         method: 'POST',
@@ -390,7 +433,7 @@ export default function Home() {
         body: JSON.stringify({
           serverId: toolCall.serverId,
           toolName: toolCall.toolName,
-          args: toolCall.args,
+          args: enrichedArgs,
           callId: toolCall.callId,
         }),
       });
@@ -411,8 +454,36 @@ export default function Home() {
 
       // Feed result back to LLM so it can continue the pipeline
       toolChainDepthRef.current++;
-      const shouldForceToolUse = toolChainDepthRef.current < 3;
-      const continuationMsg = `Tool "${toolCall.toolName}" returned:\n${resultText}\n\nIf there are remaining steps, call the next tool now.`;
+      toolChainResultsRef.current.push({ tool: toolCall.toolName, result: resultText });
+      const shouldForceToolUse = toolChainDepthRef.current < 5;
+
+      // Merge all pipeline results into a single object so the LLM has all fields available
+      // MCP results are wrapped as {content: [{type: "text", text: "{...actual data...}"}]}
+      // We need to unwrap to get the actual tool output data
+      let mergedData: Record<string, unknown> = {};
+      for (const r of toolChainResultsRef.current) {
+        try {
+          const parsed = JSON.parse(r.result);
+          let actualData = parsed;
+          // Unwrap MCP content wrapper if present
+          if (parsed?.content?.[0]?.text) {
+            try {
+              actualData = JSON.parse(parsed.content[0].text);
+            } catch { /* text wasn't JSON, use outer object */ }
+          }
+          if (typeof actualData === 'object' && actualData !== null) {
+            mergedData = { ...mergedData, ...actualData };
+          }
+        } catch { /* non-JSON result, skip */ }
+      }
+      const mergedDataStr = Object.keys(mergedData).length > 0
+        ? `\n\nMerged data from all pipeline steps:\n${JSON.stringify(mergedData, null, 2)}`
+        : '';
+
+      const allResults = toolChainResultsRef.current
+        .map(r => `[${r.tool}]: ${r.result}`)
+        .join('\n\n');
+      const continuationMsg = `Pipeline progress:\n${allResults}${mergedDataStr}\n\nCheck the user's ORIGINAL request. If there are remaining steps, call the next tool. When calling the next tool, pass ALL relevant fields from the merged data above — especially the "translated" field if a translation was done. If all requested steps are done, call "pipeline_complete" with a brief summary. Do NOT call tools the user didn't ask for.`;
       const assistantMsg: DisplayMessage = {
         id: String(++msgCounterRef.current),
         role: 'assistant',

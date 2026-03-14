@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start --port 3030",
     "lint": "next lint",
-    "mcp:dev": "npx tsx mcp-servers/cat-facts-fetch.ts & npx tsx mcp-servers/cat-facts-process.ts & npx tsx mcp-servers/cat-facts-store.ts"
+    "mcp:dev": "npx tsx mcp-servers/cat-facts-fetch.ts & npx tsx mcp-servers/cat-facts-process.ts & npx tsx mcp-servers/cat-facts-store.ts & npx tsx mcp-servers/cat-facts-translate.ts & npx tsx mcp-servers/cat-facts-display.ts"
   },
   "dependencies": {
     "@ai-sdk/deepseek": "^2.0.20",
