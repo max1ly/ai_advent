@@ -9,6 +9,7 @@ import ModelSelector from './components/ModelSelector';
 import MetricsDisplay from './components/MetricsDisplay';
 import MemoryDialog from './components/MemoryDialog';
 import InvariantsDialog from './components/InvariantsDialog';
+import IndexDialog from './components/IndexDialog';
 import McpSettingsDialog from './components/McpSettingsDialog';
 import ToolConfirmDialog from './components/ToolConfirmDialog';
 import type { Metrics, StrategyType, Branch, Invariant, McpToolCallRequest } from '@/lib/types';
@@ -46,6 +47,7 @@ export default function Home() {
   const [isMemoryOpen, setIsMemoryOpen] = useState(false);
   const [isInvariantsOpen, setIsInvariantsOpen] = useState(false);
   const [isMcpOpen, setIsMcpOpen] = useState(false);
+  const [isIndexOpen, setIsIndexOpen] = useState(false);
   const [invariants, setInvariants] = useState<Invariant[]>([]);
   const [pendingToolCall, setPendingToolCall] = useState<McpToolCallRequest | null>(null);
   const toolChainDepthRef = useRef(0);
@@ -559,6 +561,7 @@ export default function Home() {
           onMemoryOpen={handleMemoryOpen}
           onInvariantsOpen={() => setIsInvariantsOpen(true)}
           invariantCount={invariants.filter(inv => inv.enabled).length}
+          onIndexOpen={() => setIsIndexOpen(true)}
         />
       </header>
 
@@ -602,6 +605,11 @@ export default function Home() {
         onClose={() => setIsInvariantsOpen(false)}
         invariants={invariants}
         onUpdate={handleInvariantsUpdate}
+      />
+
+      <IndexDialog
+        isOpen={isIndexOpen}
+        onClose={() => setIsIndexOpen(false)}
       />
 
       <McpSettingsDialog

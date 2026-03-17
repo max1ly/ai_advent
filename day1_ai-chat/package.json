@@ -12,6 +12,7 @@
   "dependencies": {
     "@ai-sdk/deepseek": "^2.0.20",
     "@ai-sdk/react": "^3.0.88",
+    "@lancedb/lancedb": "^0.27.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@openrouter/ai-sdk-provider": "^2.2.3",
     "@tailwindcss/typography": "^0.5.19",
@@ -19,11 +20,14 @@
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "ai": "^6.0.86",
+    "apache-arrow": "^18.1.0",
     "autoprefixer": "^10.4.24",
     "better-sqlite3": "^12.6.2",
     "eslint": "^9.39.2",
     "eslint-config-next": "^16.1.6",
     "next": "^15.5.12",
+    "ollama": "^0.6.3",
+    "pdf-parse": "^2.4.5",
     "postcss": "^8.5.6",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -36,6 +40,7 @@
   "devDependencies": {
     "@modelcontextprotocol/server-everything": "^2026.1.26",
     "@types/better-sqlite3": "^7.6.13",
+    "@types/pdf-parse": "^1.1.5",
     "vitest": "^4.0.18"
   }
 }

@@ -16,6 +16,7 @@ interface MetricsDisplayProps {
   onMemoryOpen: () => void;
   onInvariantsOpen: () => void;
   invariantCount: number;
+  onIndexOpen: () => void;
 }
 
 export default function MetricsDisplay({
@@ -32,6 +33,7 @@ export default function MetricsDisplay({
   onMemoryOpen,
   onInvariantsOpen,
   invariantCount,
+  onIndexOpen,
 }: MetricsDisplayProps) {
   return (
     <div className="flex items-center gap-3 text-sm flex-wrap">
@@ -130,12 +132,12 @@ export default function MetricsDisplay({
       {/* Spacer pushes New Chat to the right */}
       <div className="flex-1" />
 
-      {/* Invariants button */}
+      {/* Index button */}
       <button
-        onClick={onInvariantsOpen}
-        className="px-3 py-1 rounded text-sm text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:scale-105 active:scale-95 transition-all"
+        onClick={onIndexOpen}
+        className="px-3 py-1 rounded text-sm text-white bg-gradient-to-r from-emerald-500 to-teal-500 hover:scale-105 active:scale-95 transition-all"
       >
-        Invariants{invariantCount > 0 ? ` (${invariantCount})` : ''}
+        Index
       </button>
 
       {/* Memory button */}
