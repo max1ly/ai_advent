@@ -48,12 +48,18 @@ export default function Home() {
   const [isInvariantsOpen, setIsInvariantsOpen] = useState(false);
   const [isMcpOpen, setIsMcpOpen] = useState(false);
   const [isIndexOpen, setIsIndexOpen] = useState(false);
+  const [ragEnabled, setRagEnabled] = useState(false);
   const [invariants, setInvariants] = useState<Invariant[]>([]);
   const [pendingToolCall, setPendingToolCall] = useState<McpToolCallRequest | null>(null);
   const toolChainDepthRef = useRef(0);
   const toolChainResultsRef = useRef<Array<{ tool: string; result: string }>>([]);
 
   const handleMemoryOpen = useCallback(() => setIsMemoryOpen(true), []);
+
+  const handleRagToggle = useCallback((enabled: boolean) => {
+    setRagEnabled(enabled);
+    localStorage.setItem('chat-rag-enabled', String(enabled));
+  }, []);
 
   const handleInvariantsUpdate = useCallback((updated: Invariant[]) => {
     setInvariants(updated);
@@ -70,6 +76,8 @@ export default function Home() {
     if (savedStrategy) setStrategy(savedStrategy);
     const savedWindowSize = localStorage.getItem('chat-window-size');
     if (savedWindowSize) setWindowSize(parseInt(savedWindowSize) || 10);
+    const savedRag = localStorage.getItem('chat-rag-enabled');
+    if (savedRag) setRagEnabled(savedRag === 'true');
   }, []);
 
   useEffect(() => {
@@ -319,6 +327,7 @@ export default function Home() {
         windowSize,
         invariants: invariants.filter(inv => inv.enabled).map(inv => inv.text),
         forceToolUse: opts?.forceToolUse,
+        ragEnabled,
       }),
     });
 
@@ -327,7 +336,7 @@ export default function Home() {
     }
 
     await streamChatResponse(res);
-  }, [model, strategy, windowSize, invariants, streamChatResponse]);
+  }, [model, strategy, windowSize, invariants, ragEnabled, streamChatResponse]);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -562,6 +571,8 @@ export default function Home() {
           onInvariantsOpen={() => setIsInvariantsOpen(true)}
           invariantCount={invariants.filter(inv => inv.enabled).length}
           onIndexOpen={() => setIsIndexOpen(true)}
+          ragEnabled={ragEnabled}
+          onRagToggle={handleRagToggle}
         />
       </header>
 

@@ -3,7 +3,7 @@ import { PDFParse } from 'pdf-parse';
 import { chunkDocument } from '@/lib/rag/chunker';
 import { embedTexts } from '@/lib/rag/embedder';
 import { insertChunks } from '@/lib/rag/store';
-import type { ChunkingStrategy, IndexingStats } from '@/lib/rag/types';
+import type { IndexingStats } from '@/lib/rag/types';
 
 export async function POST(req: Request) {
   try {
@@ -12,26 +12,15 @@ export async function POST(req: Request) {
       filename,
       mediaType,
       data: base64Data,
-      strategy,
-      chunkSize,
     } = body as {
       filename: string;
       mediaType: string;
       data: string;
-      strategy: ChunkingStrategy;
-      chunkSize?: number;
     };
 
-    if (!filename || !base64Data || !strategy) {
+    if (!filename || !base64Data) {
       return NextResponse.json(
-        { error: 'Missing required fields: filename, data, strategy' },
-        { status: 400 },
-      );
-    }
-
-    if (strategy !== 'fixed-size' && strategy !== 'structure-aware') {
-      return NextResponse.json(
-        { error: 'Invalid strategy. Use "fixed-size" or "structure-aware"' },
+        { error: 'Missing required fields: filename, data' },
         { status: 400 },
       );
     }
@@ -59,7 +48,7 @@ export async function POST(req: Request) {
     }
 
     // 2. Chunk the document
-    const chunks = chunkDocument(text, filename, mediaType, strategy, chunkSize);
+    const chunks = chunkDocument(text, filename, mediaType);
 
     if (chunks.length === 0) {
       return NextResponse.json(
@@ -79,7 +68,7 @@ export async function POST(req: Request) {
     const chunkSizes = chunks.map(c => c.text.length);
     const stats: IndexingStats = {
       filename,
-      strategy,
+      strategy: 'structure-aware' as const,
       totalChunks: chunks.length,
       avgChunkSize: Math.round(chunkSizes.reduce((a, b) => a + b, 0) / chunkSizes.length),
       minChunkSize: Math.min(...chunkSizes),

@@ -89,3 +89,31 @@ export async function getIndexedFiles(): Promise<string[]> {
   const unique = Array.from(new Set(results.map(r => r.source as string)));
   return unique;
 }
+
+/**
+ * Search for similar chunks by vector similarity.
+ * Returns results with text, metadata, and distance score.
+ */
+export async function searchChunks(
+  queryVector: number[],
+  limit = 5,
+): Promise<Array<{ text: string; source: string; chunk_id: number; section: string; page: number; _distance: number }>> {
+  const db = await getDb();
+  const tableNames = await db.tableNames();
+
+  if (!tableNames.includes(TABLE_NAME)) {
+    return [];
+  }
+
+  const table = await db.openTable(TABLE_NAME);
+  const results = await table.search(queryVector).limit(limit).toArray();
+
+  return results.map(r => ({
+    text: r.text as string,
+    source: r.source as string,
+    chunk_id: r.chunk_id as number,
+    section: r.section as string,
+    page: r.page as number,
+    _distance: r._distance as number,
+  }));
+}

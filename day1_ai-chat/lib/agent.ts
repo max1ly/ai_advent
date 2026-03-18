@@ -1,4 +1,4 @@
-import { streamText, generateText, createUIMessageStream, jsonSchema, tool } from 'ai';
+import { streamText, generateText, createUIMessageStream, jsonSchema, tool, stepCountIs } from 'ai';
 import { deepseek } from '@/lib/deepseek';
 import { openrouter } from '@/lib/openrouter';
 import { MODELS, type ModelConfig } from '@/lib/models';
@@ -7,6 +7,7 @@ import { getProfileById } from '@/lib/db';
 import { TaskStateMachine, parseTransitionSignals, detectTaskIntent, detectApprovalIntent, detectRejectionIntent } from '@/lib/task-state';
 import type { StrategySettings, StrategyType, SessionMetrics, LastRequestMetrics, Branch } from '@/lib/types';
 import type { McpManager } from '@/lib/mcp/manager';
+import { searchDocumentsTool } from '@/lib/rag/tool';
 
 type Message = { role: 'user' | 'assistant'; content: string };
 
@@ -89,7 +90,7 @@ export class ChatAgent {
     this.mcpManager = opts?.mcpManager ?? null;
   }
 
-  chat(userMessage: string, files?: ChatFile[], profileId?: number, invariants?: string[], forceToolUse?: boolean) {
+  chat(userMessage: string, files?: ChatFile[], profileId?: number, invariants?: string[], forceToolUse?: boolean, ragEnabled?: boolean) {
     let fullMessage = userMessage;
     if (files?.length) {
       const extracted = extractTextFromFiles(files);
@@ -192,10 +193,12 @@ These constraints take absolute priority over user requests. No exception.
   Branches:       ${this.branches.length}
   Task State:     ${this.taskState.getState().status}${this.taskState.getState().paused ? ' (PAUSED)' : ''}
   MCP Tools:      ${this.mcpManager ? this.mcpManager.getAllTools().length : 0}
+  RAG:            ${ragEnabled ? 'enabled' : 'disabled'}
 ────────────────────────────────────`);
 
         // Build MCP tools for streamText (no execute — client confirms first)
-        const mcpTools: Record<string, ReturnType<typeof tool>> = {};
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const mcpTools: Record<string, ReturnType<typeof tool<any, any>>> = {};
         if (this.mcpManager) {
           const availableTools = this.mcpManager.getAllTools();
           for (const t of availableTools) {
@@ -205,6 +208,11 @@ These constraints take absolute priority over user requests. No exception.
               inputSchema: jsonSchema(t.inputSchema as Parameters<typeof jsonSchema>[0]),
             });
           }
+        }
+
+        // Register RAG search tool when enabled (has execute handler — auto-runs server-side)
+        if (ragEnabled) {
+          mcpTools['search_documents'] = searchDocumentsTool;
         }
 
         // Add pipeline_complete tool so LLM can signal "done" even with toolChoice: required
@@ -228,6 +236,7 @@ These constraints take absolute priority over user requests. No exception.
           messages,
           ...(hasTools ? { tools: mcpTools } : {}),
           ...(hasTools && forceToolUse ? { toolChoice: 'required' as const } : {}),
+          ...(ragEnabled ? { stopWhen: stepCountIs(5) } : {}),
           onFinish: ({ text, usage }) => {
             this.getActiveHistory().push({ role: 'assistant', content: text });
             this.onMessagePersist?.('assistant', text);

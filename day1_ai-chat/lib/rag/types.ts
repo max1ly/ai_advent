@@ -1,4 +1,4 @@
-export type ChunkingStrategy = 'fixed-size' | 'structure-aware';
+export type ChunkingStrategy = 'structure-aware';
 
 export interface ChunkMetadata {
   source: string;

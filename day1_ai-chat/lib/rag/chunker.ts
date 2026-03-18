@@ -1,42 +1,4 @@
-import type { Chunk, ChunkingStrategy } from './types';
-
-/**
- * Fixed-size chunking: split text by character count with overlap.
- */
-export function chunkFixedSize(
-  text: string,
-  source: string,
-  chunkSize = 500,
-): Chunk[] {
-  if (chunkSize < 50) chunkSize = 50;
-  const overlap = Math.floor(chunkSize * 0.1);
-  const chunks: Chunk[] = [];
-  let start = 0;
-  let chunkId = 0;
-
-  while (start < text.length) {
-    const end = Math.min(start + chunkSize, text.length);
-    const chunkText = text.slice(start, end).trim();
-
-    if (chunkText.length > 0) {
-      chunks.push({
-        text: chunkText,
-        metadata: {
-          source,
-          chunk_id: chunkId++,
-          strategy: 'fixed-size',
-          start_char: start,
-          end_char: end,
-        },
-      });
-    }
-
-    // Move forward by chunkSize minus overlap
-    start += chunkSize - overlap;
-  }
-
-  return chunks;
-}
+import type { Chunk } from './types';
 
 /**
  * Structure-aware chunking: split by document structure.
@@ -59,18 +21,13 @@ export function chunkStructureAware(
 }
 
 /**
- * Router: pick strategy and chunk.
+ * Chunk a document using structure-aware strategy.
  */
 export function chunkDocument(
   text: string,
   source: string,
   fileType: string,
-  strategy: ChunkingStrategy,
-  chunkSize?: number,
 ): Chunk[] {
-  if (strategy === 'fixed-size') {
-    return chunkFixedSize(text, source, chunkSize);
-  }
   return chunkStructureAware(text, source, fileType);
 }
 

@@ -17,6 +17,8 @@ interface MetricsDisplayProps {
   onInvariantsOpen: () => void;
   invariantCount: number;
   onIndexOpen: () => void;
+  ragEnabled: boolean;
+  onRagToggle: (enabled: boolean) => void;
 }
 
 export default function MetricsDisplay({
@@ -34,6 +36,8 @@ export default function MetricsDisplay({
   onInvariantsOpen,
   invariantCount,
   onIndexOpen,
+  ragEnabled,
+  onRagToggle,
 }: MetricsDisplayProps) {
   return (
     <div className="flex items-center gap-3 text-sm flex-wrap">
@@ -131,6 +135,19 @@ export default function MetricsDisplay({
 
       {/* Spacer pushes New Chat to the right */}
       <div className="flex-1" />
+
+      {/* RAG toggle */}
+      <button
+        onClick={() => onRagToggle(!ragEnabled)}
+        className={`px-3 py-1 rounded text-sm font-medium transition-all ${
+          ragEnabled
+            ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+            : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+        }`}
+        title={ragEnabled ? 'RAG enabled — model searches indexed documents' : 'RAG disabled — model uses only its training data'}
+      >
+        RAG
+      </button>
 
       {/* Index button */}
       <button

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ChunkingStrategy, IndexingStats } from '@/lib/rag/types';
+import type { IndexingStats } from '@/lib/rag/types';
 
 interface IndexDialogProps {
   isOpen: boolean;
@@ -12,8 +12,6 @@ const ACCEPT = '.pdf,.md,.txt,.ts,.js,.py,.tsx,.jsx,.go,.rs,.java,.c,.cpp,.rb';
 
 export default function IndexDialog({ isOpen, onClose }: IndexDialogProps) {
   const [file, setFile] = useState<File | null>(null);
-  const [strategy, setStrategy] = useState<ChunkingStrategy>('fixed-size');
-  const [chunkSize, setChunkSize] = useState(500);
   const [isIndexing, setIsIndexing] = useState(false);
   const [stats, setStats] = useState<IndexingStats | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,8 +51,6 @@ export default function IndexDialog({ isOpen, onClose }: IndexDialogProps) {
           filename: file.name,
           mediaType: file.type || guessMediaType(file.name),
           data: base64,
-          strategy,
-          chunkSize: strategy === 'fixed-size' ? chunkSize : undefined,
         }),
       });
 
@@ -71,7 +67,7 @@ export default function IndexDialog({ isOpen, onClose }: IndexDialogProps) {
     } finally {
       setIsIndexing(false);
     }
-  }, [file, strategy, chunkSize]);
+  }, [file]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -134,57 +130,6 @@ export default function IndexDialog({ isOpen, onClose }: IndexDialogProps) {
               </div>
             )}
           </div>
-
-          {/* Strategy selector */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Chunking Strategy
-            </label>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setStrategy('fixed-size')}
-                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  strategy === 'fixed-size'
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                Fixed Size
-              </button>
-              <button
-                onClick={() => setStrategy('structure-aware')}
-                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  strategy === 'structure-aware'
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                Structure-Aware
-              </button>
-            </div>
-          </div>
-
-          {/* Chunk size slider (fixed-size only) */}
-          {strategy === 'fixed-size' && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Chunk Size: <span className="text-emerald-600">{chunkSize}</span> chars
-              </label>
-              <input
-                type="range"
-                min={200}
-                max={1000}
-                step={50}
-                value={chunkSize}
-                onChange={(e) => setChunkSize(Number(e.target.value))}
-                className="w-full accent-emerald-600"
-              />
-              <div className="flex justify-between text-xs text-gray-400">
-                <span>200</span>
-                <span>1000</span>
-              </div>
-            </div>
-          )}
 
           {/* Error */}
           {error && (
