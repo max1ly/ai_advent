@@ -19,6 +19,12 @@ interface MetricsDisplayProps {
   onIndexOpen: () => void;
   ragEnabled: boolean;
   onRagToggle: (enabled: boolean) => void;
+  ragThreshold: number;
+  ragTopK: number;
+  onRagThresholdChange: (value: number) => void;
+  onRagTopKChange: (value: number) => void;
+  ragRerank: boolean;
+  onRagRerankToggle: (enabled: boolean) => void;
 }
 
 export default function MetricsDisplay({
@@ -38,141 +44,216 @@ export default function MetricsDisplay({
   onIndexOpen,
   ragEnabled,
   onRagToggle,
+  ragThreshold,
+  ragTopK,
+  onRagThresholdChange,
+  onRagTopKChange,
+  ragRerank,
+  onRagRerankToggle,
 }: MetricsDisplayProps) {
   return (
-    <div className="flex items-center gap-3 text-sm flex-wrap">
-      {/* Strategy selector */}
-      <select
-        value={strategy}
-        onChange={(e) => onStrategyChange(e.target.value as StrategyType)}
-        className="px-2 py-1 border border-gray-300 rounded text-sm bg-white"
-      >
-        <option value="sliding-window">Sliding Window</option>
-        <option value="facts">Sticky Facts</option>
-        <option value="branching">Branching</option>
-      </select>
+    <>
+      {/* Row 1: Core controls */}
+      <div className="flex items-center gap-3 text-sm flex-wrap">
+        {/* Strategy selector */}
+        <select
+          value={strategy}
+          onChange={(e) => onStrategyChange(e.target.value as StrategyType)}
+          className="px-2 py-1 border border-gray-300 rounded text-sm bg-white"
+        >
+          <option value="sliding-window">Sliding Window</option>
+          <option value="facts">Sticky Facts</option>
+          <option value="branching">Branching</option>
+        </select>
 
-      {/* Window size — hidden for branching */}
-      {strategy !== 'branching' && (
-        <label className="flex items-center gap-1 text-gray-600">
-          Window:
-          <input
-            type="number"
-            min={2}
-            max={30}
-            value={windowSize}
-            onChange={(e) => onWindowSizeChange(Math.max(2, parseInt(e.target.value) || 10))}
-            className="w-12 px-1 py-0.5 text-center border border-gray-300 rounded text-sm"
-          />
-        </label>
-      )}
+        {/* Window size — hidden for branching */}
+        {strategy !== 'branching' && (
+          <label className="flex items-center gap-1 text-gray-600">
+            Window:
+            <input
+              type="number"
+              min={2}
+              max={30}
+              value={windowSize}
+              onChange={(e) => onWindowSizeChange(Math.max(2, parseInt(e.target.value) || 10))}
+              className="w-12 px-1 py-0.5 text-center border border-gray-300 rounded text-sm"
+            />
+          </label>
+        )}
 
-      {/* Branching controls */}
-      {strategy === 'branching' && (
-        <>
-          <button
-            onClick={onCheckpoint}
-            className="px-2 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded text-sm hover:bg-indigo-100"
-          >
-            Checkpoint
-          </button>
-          {branches.length > 0 && (
-            <select
-              value={activeBranchId ?? ''}
-              onChange={(e) => onSwitchBranch(e.target.value)}
-              className="px-2 py-1 border border-gray-300 rounded text-sm bg-white"
+        {/* Branching controls */}
+        {strategy === 'branching' && (
+          <>
+            <button
+              onClick={onCheckpoint}
+              className="px-2 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded text-sm hover:bg-indigo-100"
             >
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
+              Checkpoint
+            </button>
+            {branches.length > 0 && (
+              <select
+                value={activeBranchId ?? ''}
+                onChange={(e) => onSwitchBranch(e.target.value)}
+                className="px-2 py-1 border border-gray-300 rounded text-sm bg-white"
+              >
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </>
+        )}
+
+        <span className="text-gray-300">|</span>
+
+        {/* Token display */}
+        {metrics ? (
+          <>
+            <span className="text-gray-600">
+              Last:{' '}
+              <span className="font-medium text-gray-800">
+                {metrics.lastRequest.inputTokens}in/{metrics.lastRequest.outputTokens}out
+              </span>
+            </span>
+            <span className="text-gray-600">
+              Total:{' '}
+              <span className="font-medium text-gray-800">
+                {metrics.session.totalTokens.toLocaleString()}
+              </span>
+            </span>
+            {metrics.session.totalStrategyTokens > 0 && (
+              <span className="text-amber-600 text-xs">
+                (strategy: {metrics.session.totalStrategyTokens.toLocaleString()})
+              </span>
+            )}
+          </>
+        ) : (
+          <span className="text-gray-400">Tokens: —</span>
+        )}
+
+        {/* Task state indicator */}
+        {metrics?.taskState && metrics.taskState.status !== 'idle' && (
+          <>
+            <span className="text-gray-300">|</span>
+            <TaskStateIndicator
+              status={metrics.taskState.status}
+              currentStep={metrics.taskState.currentStep}
+              planLength={metrics.taskState.planLength}
+              paused={metrics.taskState.paused}
+              needsApproval={metrics.taskState.needsApproval}
+            />
+          </>
+        )}
+
+        {/* Spacer pushes buttons to the right */}
+        <div className="flex-1" />
+
+        {/* Memory button */}
+        <button
+          onClick={onMemoryOpen}
+          className="px-3 py-1 rounded text-sm text-white bg-gradient-to-r from-purple-600 to-pink-600 hover:scale-105 active:scale-95 transition-all"
+        >
+          Memory
+        </button>
+
+        {/* Invariants button */}
+        <button
+          onClick={onInvariantsOpen}
+          className="px-3 py-1 rounded text-sm text-white bg-gradient-to-r from-amber-600 to-orange-600 hover:scale-105 active:scale-95 transition-all relative"
+        >
+          Invariants
+          {invariantCount > 0 && (
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-4 h-4 flex items-center justify-center">
+              {invariantCount}
+            </span>
           )}
-        </>
-      )}
+        </button>
 
-      <span className="text-gray-300">|</span>
+        {/* New Chat button */}
+        <button
+          onClick={onNewChat}
+          className="px-3 py-1 rounded text-sm text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:scale-105 active:scale-95 transition-all"
+        >
+          New Chat
+        </button>
+      </div>
 
-      {/* Token display */}
-      {metrics ? (
-        <>
-          <span className="text-gray-600">
-            Last:{' '}
-            <span className="font-medium text-gray-800">
-              {metrics.lastRequest.inputTokens}in/{metrics.lastRequest.outputTokens}out
-            </span>
-          </span>
-          <span className="text-gray-600">
-            Total:{' '}
-            <span className="font-medium text-gray-800">
-              {metrics.session.totalTokens.toLocaleString()}
-            </span>
-          </span>
-          {metrics.session.totalStrategyTokens > 0 && (
-            <span className="text-amber-600 text-xs">
-              (strategy: {metrics.session.totalStrategyTokens.toLocaleString()})
-            </span>
-          )}
-        </>
-      ) : (
-        <span className="text-gray-400">Tokens: —</span>
-      )}
+      {/* Row 2: RAG controls */}
+      <div className="flex items-center gap-3 text-sm flex-wrap">
+        {/* RAG toggle */}
+        <button
+          onClick={() => onRagToggle(!ragEnabled)}
+          className={`px-3 py-1 rounded text-sm font-medium transition-all ${
+            ragEnabled
+              ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+              : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+          }`}
+          title={ragEnabled ? 'RAG enabled — model searches indexed documents' : 'RAG disabled — model uses only its training data'}
+        >
+          RAG
+        </button>
 
-      {/* Task state indicator */}
-      {metrics?.taskState && metrics.taskState.status !== 'idle' && (
-        <>
-          <span className="text-gray-300">|</span>
-          <TaskStateIndicator
-            status={metrics.taskState.status}
-            currentStep={metrics.taskState.currentStep}
-            planLength={metrics.taskState.planLength}
-            paused={metrics.taskState.paused}
-            needsApproval={metrics.taskState.needsApproval}
-          />
-        </>
-      )}
+        {/* Index button */}
+        <button
+          onClick={onIndexOpen}
+          className="px-3 py-1 rounded text-sm text-white bg-gradient-to-r from-emerald-500 to-teal-500 hover:scale-105 active:scale-95 transition-all"
+        >
+          Index
+        </button>
 
-      {/* Spacer pushes New Chat to the right */}
-      <div className="flex-1" />
+        {ragEnabled && (
+          <>
+            <span className="text-gray-300">|</span>
 
-      {/* RAG toggle */}
-      <button
-        onClick={() => onRagToggle(!ragEnabled)}
-        className={`px-3 py-1 rounded text-sm font-medium transition-all ${
-          ragEnabled
-            ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-            : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
-        }`}
-        title={ragEnabled ? 'RAG enabled — model searches indexed documents' : 'RAG disabled — model uses only its training data'}
-      >
-        RAG
-      </button>
+            {/* Rerank toggle */}
+            <button
+              onClick={() => onRagRerankToggle(!ragRerank)}
+              className={`px-2 py-0.5 rounded text-xs font-medium transition-all ${
+                ragRerank
+                  ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                  : 'bg-gray-100 text-gray-500 border border-gray-300'
+              }`}
+              title={ragRerank ? 'Reranking enabled — results sorted by cosine similarity' : 'Reranking disabled — raw LanceDB results'}
+            >
+              Rerank
+            </button>
 
-      {/* Index button */}
-      <button
-        onClick={onIndexOpen}
-        className="px-3 py-1 rounded text-sm text-white bg-gradient-to-r from-emerald-500 to-teal-500 hover:scale-105 active:scale-95 transition-all"
-      >
-        Index
-      </button>
+            {/* Threshold slider and Top-K — only when reranking */}
+            {ragRerank && (
+              <>
+                <label className="flex items-center gap-1 text-gray-600">
+                  Threshold:
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={ragThreshold}
+                    onChange={(e) => onRagThresholdChange(parseFloat(e.target.value))}
+                    className="w-20 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                  />
+                  <span className="text-xs font-mono w-8">{ragThreshold.toFixed(2)}</span>
+                </label>
 
-      {/* Memory button */}
-      <button
-        onClick={onMemoryOpen}
-        className="px-3 py-1 rounded text-sm text-white bg-gradient-to-r from-purple-600 to-pink-600 hover:scale-105 active:scale-95 transition-all"
-      >
-        Memory
-      </button>
-
-      {/* New Chat button */}
-      <button
-        onClick={onNewChat}
-        className="px-3 py-1 rounded text-sm text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:scale-105 active:scale-95 transition-all"
-      >
-        New Chat
-      </button>
-    </div>
+                <label className="flex items-center gap-1 text-gray-600">
+                  Top-K:
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={ragTopK}
+                    onChange={(e) => onRagTopKChange(Math.max(1, parseInt(e.target.value) || 10))}
+                    className="w-12 px-1 py-0.5 text-center border border-gray-300 rounded text-sm"
+                  />
+                </label>
+              </>
+            )}
+          </>
+        )}
+      </div>
+    </>
   );
 }
 

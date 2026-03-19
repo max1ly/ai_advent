@@ -13,7 +13,7 @@ import IndexDialog from './components/IndexDialog';
 import McpSettingsDialog from './components/McpSettingsDialog';
 import ToolConfirmDialog from './components/ToolConfirmDialog';
 import type { Metrics, StrategyType, Branch, Invariant, McpToolCallRequest } from '@/lib/types';
-import type { DisplayMessage, FileAttachment } from '@/lib/types';
+import type { DisplayMessage, FileAttachment, RagSource } from '@/lib/types';
 import { DEFAULT_MODEL } from '@/lib/models';
 
 function fileToBase64(file: File): Promise<string> {
@@ -49,6 +49,9 @@ export default function Home() {
   const [isMcpOpen, setIsMcpOpen] = useState(false);
   const [isIndexOpen, setIsIndexOpen] = useState(false);
   const [ragEnabled, setRagEnabled] = useState(false);
+  const [ragThreshold, setRagThreshold] = useState(0.3);
+  const [ragTopK, setRagTopK] = useState(10);
+  const [ragRerank, setRagRerank] = useState(true);
   const [invariants, setInvariants] = useState<Invariant[]>([]);
   const [pendingToolCall, setPendingToolCall] = useState<McpToolCallRequest | null>(null);
   const toolChainDepthRef = useRef(0);
@@ -59,6 +62,21 @@ export default function Home() {
   const handleRagToggle = useCallback((enabled: boolean) => {
     setRagEnabled(enabled);
     localStorage.setItem('chat-rag-enabled', String(enabled));
+  }, []);
+
+  const handleRagThresholdChange = useCallback((value: number) => {
+    setRagThreshold(value);
+    localStorage.setItem('chat-rag-threshold', String(value));
+  }, []);
+
+  const handleRagTopKChange = useCallback((value: number) => {
+    setRagTopK(value);
+    localStorage.setItem('chat-rag-topk', String(value));
+  }, []);
+
+  const handleRagRerankToggle = useCallback((enabled: boolean) => {
+    setRagRerank(enabled);
+    localStorage.setItem('chat-rag-rerank', String(enabled));
   }, []);
 
   const handleInvariantsUpdate = useCallback((updated: Invariant[]) => {
@@ -78,6 +96,12 @@ export default function Home() {
     if (savedWindowSize) setWindowSize(parseInt(savedWindowSize) || 10);
     const savedRag = localStorage.getItem('chat-rag-enabled');
     if (savedRag) setRagEnabled(savedRag === 'true');
+    const savedThreshold = localStorage.getItem('chat-rag-threshold');
+    if (savedThreshold) setRagThreshold(parseFloat(savedThreshold) || 0.3);
+    const savedTopK = localStorage.getItem('chat-rag-topk');
+    if (savedTopK) setRagTopK(parseInt(savedTopK) || 10);
+    const savedRerank = localStorage.getItem('chat-rag-rerank');
+    if (savedRerank) setRagRerank(savedRerank !== 'false');
   }, []);
 
   useEffect(() => {
@@ -260,7 +284,13 @@ export default function Home() {
 
       for (const line of lines) {
         if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
-        const event = JSON.parse(line.slice(6));
+        let event;
+        try {
+          event = JSON.parse(line.slice(6));
+        } catch {
+          console.warn('[SSE] Malformed event, skipping:', line.slice(6, 100));
+          continue;
+        }
         if (event.type === 'text-delta') {
           assistantText += event.delta;
           setMessages((prev) => {
@@ -273,6 +303,15 @@ export default function Home() {
           });
         } else if (event.type === 'data-metrics') {
           setMetrics(event.data as Metrics);
+        } else if (event.type === 'data-rag-sources') {
+          setMessages((prev) => {
+            const updated = [...prev];
+            updated[updated.length - 1] = {
+              ...updated[updated.length - 1],
+              ragSources: event.data as RagSource[],
+            };
+            return updated;
+          });
         } else if (event.type === 'tool-input-available') {
           const toolNameStr = event.toolName as string;
           // pipeline_complete is a signal tool — display summary, no confirmation needed
@@ -328,6 +367,9 @@ export default function Home() {
         invariants: invariants.filter(inv => inv.enabled).map(inv => inv.text),
         forceToolUse: opts?.forceToolUse,
         ragEnabled,
+        ragThreshold,
+        ragTopK,
+        ragRerank,
       }),
     });
 
@@ -336,7 +378,7 @@ export default function Home() {
     }
 
     await streamChatResponse(res);
-  }, [model, strategy, windowSize, invariants, ragEnabled, streamChatResponse]);
+  }, [model, strategy, windowSize, invariants, ragEnabled, ragThreshold, ragTopK, ragRerank, streamChatResponse]);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -573,6 +615,12 @@ export default function Home() {
           onIndexOpen={() => setIsIndexOpen(true)}
           ragEnabled={ragEnabled}
           onRagToggle={handleRagToggle}
+          ragThreshold={ragThreshold}
+          ragTopK={ragTopK}
+          onRagThresholdChange={handleRagThresholdChange}
+          onRagTopKChange={handleRagTopKChange}
+          ragRerank={ragRerank}
+          onRagRerankToggle={handleRagRerankToggle}
         />
       </header>
 

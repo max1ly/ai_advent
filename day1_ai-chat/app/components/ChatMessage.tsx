@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
 import type { DisplayMessage, FileAttachment } from '@/lib/types';
+import RagSources from './RagSources';
 
 interface ChatMessageProps {
   message: DisplayMessage;
@@ -115,6 +116,9 @@ export default function ChatMessage({ message }: ChatMessageProps) {
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
           {content}
         </ReactMarkdown>
+        {message.ragSources && message.ragSources.length > 0 && (
+          <RagSources sources={message.ragSources} />
+        )}
       </div>
     </div>
   );

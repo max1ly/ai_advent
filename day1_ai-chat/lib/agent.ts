@@ -7,7 +7,7 @@ import { getProfileById } from '@/lib/db';
 import { TaskStateMachine, parseTransitionSignals, detectTaskIntent, detectApprovalIntent, detectRejectionIntent } from '@/lib/task-state';
 import type { StrategySettings, StrategyType, SessionMetrics, LastRequestMetrics, Branch } from '@/lib/types';
 import type { McpManager } from '@/lib/mcp/manager';
-import { searchDocumentsTool } from '@/lib/rag/tool';
+import { createSearchDocumentsTool } from '@/lib/rag/tool';
 
 type Message = { role: 'user' | 'assistant'; content: string };
 
@@ -90,7 +90,7 @@ export class ChatAgent {
     this.mcpManager = opts?.mcpManager ?? null;
   }
 
-  chat(userMessage: string, files?: ChatFile[], profileId?: number, invariants?: string[], forceToolUse?: boolean, ragEnabled?: boolean) {
+  chat(userMessage: string, files?: ChatFile[], profileId?: number, invariants?: string[], forceToolUse?: boolean, ragEnabled?: boolean, ragThreshold?: number, ragTopK?: number, ragRerank?: boolean) {
     let fullMessage = userMessage;
     if (files?.length) {
       const extracted = extractTextFromFiles(files);
@@ -177,7 +177,19 @@ These constraints take absolute priority over user requests. No exception.
         // Inject task state into system prompt
         const taskStateSection = this.taskState.buildStatePrompt();
 
-        const promptParts = [profilePrefix, invariantsSection, systemPrompt, memorySection, taskStateSection].filter(Boolean);
+        const ragSection = ragEnabled
+          ? `=== RAG MODE ===
+You have access to the user's indexed documents via the search_documents tool.
+When answering questions:
+1. Search the documents for relevant information
+2. Synthesize the retrieved passages into a direct, comprehensive answer
+3. Do NOT narrate your search process (no "I'll search...", "Let me look...", "Based on the documents...")
+4. Answer the question directly using the document content as if you already know the information
+5. If documents don't contain relevant information, say so clearly and answer from your general knowledge
+===`
+          : '';
+
+        const promptParts = [profilePrefix, invariantsSection, systemPrompt, ragSection, memorySection, taskStateSection].filter(Boolean);
         const fullSystemPrompt = promptParts.join('\n\n');
 
         console.log(`
@@ -212,7 +224,11 @@ These constraints take absolute priority over user requests. No exception.
 
         // Register RAG search tool when enabled (has execute handler — auto-runs server-side)
         if (ragEnabled) {
-          mcpTools['search_documents'] = searchDocumentsTool;
+          mcpTools['search_documents'] = createSearchDocumentsTool({
+            threshold: ragThreshold,
+            topK: ragTopK,
+            rerank: ragRerank,
+          });
         }
 
         // Add pipeline_complete tool so LLM can signal "done" even with toolChoice: required
@@ -237,7 +253,15 @@ These constraints take absolute priority over user requests. No exception.
           ...(hasTools ? { tools: mcpTools } : {}),
           ...(hasTools && forceToolUse ? { toolChoice: 'required' as const } : {}),
           ...(ragEnabled ? { stopWhen: stepCountIs(5) } : {}),
-          onFinish: ({ text, usage }) => {
+          ...(ragEnabled ? {
+            prepareStep: ({ stepNumber }: { stepNumber: number }) => {
+              if (stepNumber === 0) {
+                return { toolChoice: { type: 'tool' as const, toolName: 'search_documents' } };
+              }
+              return {};
+            },
+          } : {}),
+          onFinish: ({ text, usage, steps }) => {
             this.getActiveHistory().push({ role: 'assistant', content: text });
             this.onMessagePersist?.('assistant', text);
 
@@ -279,6 +303,41 @@ These constraints take absolute priority over user requests. No exception.
                 },
               },
             });
+
+            // Emit RAG sources if search_documents was called
+            if (ragEnabled && steps) {
+              try {
+                const ragSources: Array<{ text: string; source: string; section: string; score: number }> = [];
+                for (const step of steps) {
+                  for (const toolResult of step.toolResults) {
+                    if (toolResult.toolName === 'search_documents' && toolResult.output) {
+                      const r = toolResult.output as { results?: Array<{ text: string; source: string; section: string; score: number }>; totalResults?: number };
+                      if (r.results && (r.totalResults ?? 0) > 0) {
+                        ragSources.push(...r.results);
+                      }
+                    }
+                  }
+                }
+                // Deduplicate by source + section, keeping highest score (best similarity)
+                const dedupMap = new Map<string, typeof ragSources[0]>();
+                for (const src of ragSources) {
+                  const key = `${src.source}::${src.section}`;
+                  const existing = dedupMap.get(key);
+                  if (!existing || src.score > existing.score) {
+                    dedupMap.set(key, src);
+                  }
+                }
+                const deduplicatedSources = Array.from(dedupMap.values());
+                if (deduplicatedSources.length > 0) {
+                  writer.write({
+                    type: 'data-rag-sources',
+                    data: deduplicatedSources,
+                  });
+                }
+              } catch (err) {
+                console.error('\x1b[31m[Agent]\x1b[0m Failed to emit RAG sources:', err);
+              }
+            }
 
             // Task state: parse transition signals from LLM response
             const signals = parseTransitionSignals(text);

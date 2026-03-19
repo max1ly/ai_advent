@@ -5,11 +5,19 @@ export interface FileAttachment {
   size: number;
 }
 
+export interface RagSource {
+  text: string;
+  source: string;    // filename
+  section: string;
+  score: number;     // _distance from LanceDB (lower = more similar)
+}
+
 export interface DisplayMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   files?: FileAttachment[];
+  ragSources?: RagSource[];
 }
 
 export type StrategyType = 'sliding-window' | 'facts' | 'branching';

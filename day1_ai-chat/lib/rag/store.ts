@@ -97,7 +97,7 @@ export async function getIndexedFiles(): Promise<string[]> {
 export async function searchChunks(
   queryVector: number[],
   limit = 5,
-): Promise<Array<{ text: string; source: string; chunk_id: number; section: string; page: number; _distance: number }>> {
+): Promise<Array<{ text: string; source: string; chunk_id: number; section: string; page: number; _distance: number; vector: number[] }>> {
   const db = await getDb();
   const tableNames = await db.tableNames();
 
@@ -115,5 +115,6 @@ export async function searchChunks(
     section: r.section as string,
     page: r.page as number,
     _distance: r._distance as number,
+    vector: r.vector as number[],
   }));
 }
