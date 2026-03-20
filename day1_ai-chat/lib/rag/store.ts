@@ -115,6 +115,6 @@ export async function searchChunks(
     section: r.section as string,
     page: r.page as number,
     _distance: r._distance as number,
-    vector: r.vector as number[],
+    vector: Array.from(r.vector as Iterable<number>),
   }));
 }

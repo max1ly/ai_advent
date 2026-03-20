@@ -2,8 +2,18 @@ import { NextResponse } from 'next/server';
 import { PDFParse } from 'pdf-parse';
 import { chunkDocument } from '@/lib/rag/chunker';
 import { embedTexts } from '@/lib/rag/embedder';
-import { insertChunks } from '@/lib/rag/store';
+import { insertChunks, getIndexedFiles } from '@/lib/rag/store';
 import type { IndexingStats } from '@/lib/rag/types';
+
+export async function GET() {
+  try {
+    const files = await getIndexedFiles();
+    return NextResponse.json({ files });
+  } catch (err) {
+    console.error('[RAG] Error listing indexed files:', err);
+    return NextResponse.json({ files: [] });
+  }
+}
 
 export async function POST(req: Request) {
   try {

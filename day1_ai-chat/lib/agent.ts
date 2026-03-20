@@ -185,7 +185,11 @@ When answering questions:
 2. Synthesize the retrieved passages into a direct, comprehensive answer
 3. Do NOT narrate your search process (no "I'll search...", "Let me look...", "Based on the documents...")
 4. Answer the question directly using the document content as if you already know the information
-5. If documents don't contain relevant information, say so clearly and answer from your general knowledge
+5. IMPORTANT — "I don't know" rule: If the search returns NO results, or the results are clearly irrelevant to the question, you MUST:
+   - Honestly state that you could not find relevant information in the indexed documents
+   - Ask the user to rephrase or clarify their question
+   - Do NOT fabricate an answer from general knowledge when documents are expected to have the answer
+   - Do NOT pretend the documents contain information they don't
 ===`
           : '';
 
@@ -261,7 +265,8 @@ When answering questions:
               return {};
             },
           } : {}),
-          onFinish: ({ text, usage, steps }) => {
+          onFinish: ({ text, usage }) => {
+            // State management only — no writer.write() here (writer may be closed)
             this.getActiveHistory().push({ role: 'assistant', content: text });
             this.onMessagePersist?.('assistant', text);
 
@@ -274,70 +279,11 @@ When answering questions:
             this.sessionMetrics.totalStrategyTokens += strategyTokens;
             this.sessionMetrics.exchanges += 1;
 
-            const lastRequest: LastRequestMetrics = {
-              inputTokens,
-              outputTokens,
-              totalTokens: inputTokens + outputTokens,
-              strategyTokens,
-            };
-
             console.log(`\x1b[32m[Agent]\x1b[0m Response complete:
   Time:     ${Date.now() - startTime}ms
-  Tokens:   ${lastRequest.totalTokens} (${inputTokens} in + ${outputTokens} out)
+  Tokens:   ${inputTokens + outputTokens} (${inputTokens} in + ${outputTokens} out)
   Strategy: ${strategyTokens} tokens overhead
   History:  ${this.getActiveHistory().length} messages`);
-
-            const currentTaskState = this.taskState.getState();
-
-            writer.write({
-              type: 'data-metrics',
-              data: {
-                lastRequest,
-                session: { ...this.sessionMetrics },
-                taskState: {
-                  status: currentTaskState.status,
-                  currentStep: currentTaskState.currentStep,
-                  planLength: currentTaskState.plan.length,
-                  paused: currentTaskState.paused,
-                  needsApproval: currentTaskState.status === 'review' || currentTaskState.status === 'validation',
-                },
-              },
-            });
-
-            // Emit RAG sources if search_documents was called
-            if (ragEnabled && steps) {
-              try {
-                const ragSources: Array<{ text: string; source: string; section: string; score: number }> = [];
-                for (const step of steps) {
-                  for (const toolResult of step.toolResults) {
-                    if (toolResult.toolName === 'search_documents' && toolResult.output) {
-                      const r = toolResult.output as { results?: Array<{ text: string; source: string; section: string; score: number }>; totalResults?: number };
-                      if (r.results && (r.totalResults ?? 0) > 0) {
-                        ragSources.push(...r.results);
-                      }
-                    }
-                  }
-                }
-                // Deduplicate by source + section, keeping highest score (best similarity)
-                const dedupMap = new Map<string, typeof ragSources[0]>();
-                for (const src of ragSources) {
-                  const key = `${src.source}::${src.section}`;
-                  const existing = dedupMap.get(key);
-                  if (!existing || src.score > existing.score) {
-                    dedupMap.set(key, src);
-                  }
-                }
-                const deduplicatedSources = Array.from(dedupMap.values());
-                if (deduplicatedSources.length > 0) {
-                  writer.write({
-                    type: 'data-rag-sources',
-                    data: deduplicatedSources,
-                  });
-                }
-              } catch (err) {
-                console.error('\x1b[31m[Agent]\x1b[0m Failed to emit RAG sources:', err);
-              }
-            }
 
             // Task state: parse transition signals from LLM response
             const signals = parseTransitionSignals(text);
@@ -374,7 +320,63 @@ When answering questions:
           },
         });
 
-        writer.merge(result.toUIMessageStream());
+        // Await merge so the stream completes before we write data events
+        await writer.merge(result.toUIMessageStream());
+
+        // Stream is done — writer is still open. Emit metrics and RAG sources.
+        const finalUsage = await result.usage;
+        const finalSteps = await result.steps;
+
+        const inputTokens = finalUsage?.inputTokens ?? 0;
+        const outputTokens = finalUsage?.outputTokens ?? 0;
+        const lastRequest: LastRequestMetrics = {
+          inputTokens,
+          outputTokens,
+          totalTokens: inputTokens + outputTokens,
+          strategyTokens,
+        };
+
+        const currentTaskState = this.taskState.getState();
+
+        writer.write({
+          type: 'data-metrics',
+          data: {
+            lastRequest,
+            session: { ...this.sessionMetrics },
+            taskState: {
+              status: currentTaskState.status,
+              currentStep: currentTaskState.currentStep,
+              planLength: currentTaskState.plan.length,
+              paused: currentTaskState.paused,
+              needsApproval: currentTaskState.status === 'review' || currentTaskState.status === 'validation',
+            },
+          },
+        });
+
+        // Emit RAG sources if search_documents was called
+        if (ragEnabled && finalSteps) {
+          try {
+            const ragSources: Array<{ text: string; source: string; section: string; score: number }> = [];
+            for (const step of finalSteps) {
+              for (const toolResult of step.toolResults) {
+                if (toolResult.toolName === 'search_documents' && toolResult.output) {
+                  const r = toolResult.output as { results?: Array<{ text: string; source: string; section: string; score: number }>; totalResults?: number };
+                  if (r.results && (r.totalResults ?? 0) > 0) {
+                    ragSources.push(...r.results);
+                  }
+                }
+              }
+            }
+            if (ragSources.length > 0) {
+              writer.write({
+                type: 'data-rag-sources',
+                data: ragSources,
+              });
+            }
+          } catch (err) {
+            console.error('\x1b[31m[Agent]\x1b[0m Failed to emit RAG sources:', err);
+          }
+        }
       },
     });
 

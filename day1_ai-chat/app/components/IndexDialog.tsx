@@ -15,7 +15,17 @@ export default function IndexDialog({ isOpen, onClose }: IndexDialogProps) {
   const [isIndexing, setIsIndexing] = useState(false);
   const [stats, setStats] = useState<IndexingStats | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [indexedFiles, setIndexedFiles] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch indexed files when dialog opens
+  useEffect(() => {
+    if (!isOpen) return;
+    fetch('/api/index')
+      .then(res => res.json())
+      .then(data => setIndexedFiles(data.files ?? []))
+      .catch(() => setIndexedFiles([]));
+  }, [isOpen, stats]); // re-fetch after successful indexing (stats changes)
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0] ?? null;
@@ -102,6 +112,23 @@ export default function IndexDialog({ isOpen, onClose }: IndexDialogProps) {
 
         {/* Content */}
         <div className="overflow-y-auto px-6 py-4 flex-1 space-y-4">
+          {/* Indexed files */}
+          {indexedFiles.length > 0 && (
+            <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                Indexed Documents ({indexedFiles.length})
+              </h3>
+              <ul className="space-y-1">
+                {indexedFiles.map((name) => (
+                  <li key={name} className="flex items-center gap-2 text-sm text-gray-700">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
+                    {name}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* File upload */}
           <div
             onDrop={handleDrop}
