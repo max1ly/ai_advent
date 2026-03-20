@@ -97,6 +97,7 @@ export async function getIndexedFiles(): Promise<string[]> {
 export async function searchChunks(
   queryVector: number[],
   limit = 5,
+  sourceFilter?: string[],
 ): Promise<Array<{ text: string; source: string; chunk_id: number; section: string; page: number; _distance: number; vector: number[] }>> {
   const db = await getDb();
   const tableNames = await db.tableNames();
@@ -106,7 +107,13 @@ export async function searchChunks(
   }
 
   const table = await db.openTable(TABLE_NAME);
-  const results = await table.search(queryVector).limit(limit).toArray();
+  let query = table.search(queryVector).limit(limit);
+  if (sourceFilter && sourceFilter.length > 0) {
+    const escaped = sourceFilter.map(s => s.replace(/'/g, "''"));
+    const inList = escaped.map(s => `'${s}'`).join(', ');
+    query = query.where(`source IN (${inList})`);
+  }
+  const results = await query.toArray();
 
   return results.map(r => ({
     text: r.text as string,

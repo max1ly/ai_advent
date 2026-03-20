@@ -52,6 +52,7 @@ export default function Home() {
   const [ragThreshold, setRagThreshold] = useState(0.3);
   const [ragTopK, setRagTopK] = useState(10);
   const [ragRerank, setRagRerank] = useState(true);
+  const [ragSourceFilter, setRagSourceFilter] = useState<string[]>([]);
   const [invariants, setInvariants] = useState<Invariant[]>([]);
   const [pendingToolCall, setPendingToolCall] = useState<McpToolCallRequest | null>(null);
   const toolChainDepthRef = useRef(0);
@@ -370,6 +371,7 @@ export default function Home() {
         ragThreshold,
         ragTopK,
         ragRerank,
+        ragSourceFilter: ragSourceFilter.length > 0 ? ragSourceFilter : undefined,
       }),
     });
 
@@ -378,7 +380,7 @@ export default function Home() {
     }
 
     await streamChatResponse(res);
-  }, [model, strategy, windowSize, invariants, ragEnabled, ragThreshold, ragTopK, ragRerank, streamChatResponse]);
+  }, [model, strategy, windowSize, invariants, ragEnabled, ragThreshold, ragTopK, ragRerank, ragSourceFilter, streamChatResponse]);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -669,6 +671,8 @@ export default function Home() {
       <IndexDialog
         isOpen={isIndexOpen}
         onClose={() => setIsIndexOpen(false)}
+        selectedDocs={ragSourceFilter}
+        onSelectedDocsChange={setRagSourceFilter}
       />
 
       <McpSettingsDialog

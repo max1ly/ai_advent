@@ -6,11 +6,13 @@ import type { IndexingStats } from '@/lib/rag/types';
 interface IndexDialogProps {
   isOpen: boolean;
   onClose: () => void;
+  selectedDocs: string[];
+  onSelectedDocsChange: (docs: string[]) => void;
 }
 
 const ACCEPT = '.pdf,.md,.txt,.ts,.js,.py,.tsx,.jsx,.go,.rs,.java,.c,.cpp,.rb';
 
-export default function IndexDialog({ isOpen, onClose }: IndexDialogProps) {
+export default function IndexDialog({ isOpen, onClose, selectedDocs, onSelectedDocsChange }: IndexDialogProps) {
   const [file, setFile] = useState<File | null>(null);
   const [isIndexing, setIsIndexing] = useState(false);
   const [stats, setStats] = useState<IndexingStats | null>(null);
@@ -115,16 +117,60 @@ export default function IndexDialog({ isOpen, onClose }: IndexDialogProps) {
           {/* Indexed files */}
           {indexedFiles.length > 0 && (
             <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                Indexed Documents ({indexedFiles.length})
-              </h3>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Indexed Documents ({indexedFiles.length})
+                </h3>
+                <button
+                  onClick={() => {
+                    if (selectedDocs.length === indexedFiles.length) {
+                      onSelectedDocsChange([]);
+                    } else {
+                      onSelectedDocsChange([...indexedFiles]);
+                    }
+                  }}
+                  className="text-[10px] text-emerald-600 hover:text-emerald-800 font-medium"
+                >
+                  {selectedDocs.length === indexedFiles.length ? 'Deselect all' : 'Select all'}
+                </button>
+              </div>
+              <p className="text-[10px] text-gray-400 mb-2">
+                {selectedDocs.length === 0 ? 'All documents searched' : `${selectedDocs.length} selected for RAG search`}
+              </p>
               <ul className="space-y-1">
-                {indexedFiles.map((name) => (
-                  <li key={name} className="flex items-center gap-2 text-sm text-gray-700">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
-                    {name}
-                  </li>
-                ))}
+                {indexedFiles.map((name) => {
+                  const isSelected = selectedDocs.includes(name);
+                  return (
+                    <li
+                      key={name}
+                      onClick={() => {
+                        if (isSelected) {
+                          onSelectedDocsChange(selectedDocs.filter(d => d !== name));
+                        } else {
+                          onSelectedDocsChange([...selectedDocs, name]);
+                        }
+                      }}
+                      className={`flex items-center gap-2 text-sm cursor-pointer rounded px-1.5 py-0.5 transition-colors ${
+                        isSelected
+                          ? 'text-emerald-800 bg-emerald-50'
+                          : 'text-gray-500 hover:bg-gray-100'
+                      }`}
+                    >
+                      <span className={`w-3.5 h-3.5 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
+                        isSelected
+                          ? 'bg-emerald-500 border-emerald-500'
+                          : 'border-gray-300'
+                      }`}>
+                        {isSelected && (
+                          <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </span>
+                      {name}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}

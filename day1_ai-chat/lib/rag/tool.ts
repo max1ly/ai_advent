@@ -10,10 +10,11 @@ const inputSchema = z.object({
  * Factory function to create a parameterized search_documents tool.
  * Captures threshold and topK in closure per-request.
  */
-export function createSearchDocumentsTool(opts?: { threshold?: number; topK?: number; rerank?: boolean }) {
+export function createSearchDocumentsTool(opts?: { threshold?: number; topK?: number; rerank?: boolean; sourceFilter?: string[] }) {
   const threshold = opts?.threshold ?? 0.3;
   const topK = opts?.topK ?? 10;
   const rerank = opts?.rerank ?? true;
+  const sourceFilter = opts?.sourceFilter;
 
   return tool({
     description:
@@ -21,7 +22,7 @@ export function createSearchDocumentsTool(opts?: { threshold?: number; topK?: nu
     inputSchema,
     execute: async ({ query }) => {
       try {
-        const result = await retrieveRelevant(query, topK, threshold, 5, rerank);
+        const result = await retrieveRelevant(query, topK, threshold, 5, rerank, sourceFilter);
         console.log(`\x1b[35m[RAG]\x1b[0m Search "${query.slice(0, 60)}": ${result.totalResults} results (topK=${topK}, threshold=${threshold}, rerank=${rerank})`);
         return result;
       } catch (err) {

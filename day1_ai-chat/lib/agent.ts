@@ -90,7 +90,7 @@ export class ChatAgent {
     this.mcpManager = opts?.mcpManager ?? null;
   }
 
-  chat(userMessage: string, files?: ChatFile[], profileId?: number, invariants?: string[], forceToolUse?: boolean, ragEnabled?: boolean, ragThreshold?: number, ragTopK?: number, ragRerank?: boolean) {
+  chat(userMessage: string, files?: ChatFile[], profileId?: number, invariants?: string[], forceToolUse?: boolean, ragEnabled?: boolean, ragThreshold?: number, ragTopK?: number, ragRerank?: boolean, ragSourceFilter?: string[]) {
     let fullMessage = userMessage;
     if (files?.length) {
       const extracted = extractTextFromFiles(files);
@@ -232,6 +232,7 @@ When answering questions:
             threshold: ragThreshold,
             topK: ragTopK,
             rerank: ragRerank,
+            sourceFilter: ragSourceFilter,
           });
         }
 
@@ -356,22 +357,44 @@ When answering questions:
         // Emit RAG sources if search_documents was called
         if (ragEnabled && finalSteps) {
           try {
-            const ragSources: Array<{ text: string; source: string; section: string; score: number }> = [];
-            for (const step of finalSteps) {
-              for (const toolResult of step.toolResults) {
-                if (toolResult.toolName === 'search_documents' && toolResult.output) {
-                  const r = toolResult.output as { results?: Array<{ text: string; source: string; section: string; score: number }>; totalResults?: number };
-                  if (r.results && (r.totalResults ?? 0) > 0) {
-                    ragSources.push(...r.results);
+            // Check if the LLM indicated it couldn't find relevant info
+            const finalText = await result.text;
+            const refusalPatterns = [
+              /could not find (?:any |relevant )?information/i,
+              /no (?:relevant )?information (?:was )?found/i,
+              /don'?t have (?:the )?relevant information/i,
+              /falls? outside (?:the )?scope/i,
+              /not (?:covered |discussed |mentioned )in the (?:indexed |uploaded )/i,
+              /couldn'?t find (?:any )?relevant/i,
+            ];
+            const isRefusal = refusalPatterns.some(p => p.test(finalText));
+
+            if (!isRefusal) {
+              const ragSourceMap = new Map<string, { text: string; source: string; section: string; score: number }>();
+              for (const step of finalSteps) {
+                for (const toolResult of step.toolResults) {
+                  if (toolResult.toolName === 'search_documents' && toolResult.output) {
+                    const r = toolResult.output as { results?: Array<{ text: string; source: string; section: string; score: number }>; totalResults?: number };
+                    if (r.results && (r.totalResults ?? 0) > 0) {
+                      for (const src of r.results) {
+                        const key = `${src.source}::${src.section}::${src.text.slice(0, 100)}`;
+                        const existing = ragSourceMap.get(key);
+                        if (!existing || src.score > existing.score) {
+                          ragSourceMap.set(key, src);
+                        }
+                      }
+                    }
                   }
                 }
               }
-            }
-            if (ragSources.length > 0) {
-              writer.write({
-                type: 'data-rag-sources',
-                data: ragSources,
-              });
+              const ragSources = Array.from(ragSourceMap.values())
+                .sort((a, b) => b.score - a.score);
+              if (ragSources.length > 0) {
+                writer.write({
+                  type: 'data-rag-sources',
+                  data: ragSources,
+                });
+              }
             }
           } catch (err) {
             console.error('\x1b[31m[Agent]\x1b[0m Failed to emit RAG sources:', err);

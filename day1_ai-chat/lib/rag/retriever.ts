@@ -24,9 +24,10 @@ export async function retrieveRelevant(
   threshold = 0.3,
   maxResults = 5,
   rerank = true,
+  sourceFilter?: string[],
 ): Promise<{ results: RetrievalResult[]; query: string; totalResults: number }> {
   const queryVector = await embedSingle(query);
-  const chunks = await searchChunks(queryVector, retrieveK);
+  const chunks = await searchChunks(queryVector, retrieveK, sourceFilter);
 
   let results: RetrievalResult[];
   if (rerank) {
