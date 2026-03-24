@@ -1,6 +1,7 @@
 import { streamText, generateText, createUIMessageStream, jsonSchema, tool, stepCountIs } from 'ai';
 import { deepseek } from '@/lib/deepseek';
 import { openrouter } from '@/lib/openrouter';
+import { ollama } from '@/lib/ollama';
 import { MODELS, type ModelConfig } from '@/lib/models';
 import { memoryManager } from '@/lib/memory';
 import { getProfileById } from '@/lib/db';
@@ -131,11 +132,8 @@ export class ChatAgent {
       }
     }
 
-    const { modelConfig, systemPrompt } = this;
-    const modelInstance =
-      modelConfig.provider === 'openrouter'
-        ? openrouter(modelConfig.id)
-        : deepseek(modelConfig.id);
+    const { systemPrompt } = this;
+    const modelInstance = this.getModelInstance();
 
     const startTime = Date.now();
 
@@ -198,8 +196,8 @@ When answering questions:
 
         console.log(`
 \x1b[36m[Agent]\x1b[0m ─────────────────────────
-  Model:          ${modelConfig.id} (${modelConfig.tier})
-  Provider:       ${modelConfig.provider}
+  Model:          ${this.modelConfig.id} (${this.modelConfig.tier})
+  Provider:       ${this.modelConfig.provider}
   History:        ${this.getActiveHistory().length} messages
   Strategy:       ${this.strategy} (window: ${this.windowSize})
   Facts:          ${Object.keys(this.facts).length} keys
@@ -589,8 +587,13 @@ When answering questions:
   }
 
   private getModelInstance() {
-    return this.modelConfig.provider === 'openrouter'
-      ? openrouter(this.modelConfig.id)
-      : deepseek(this.modelConfig.id);
+    switch (this.modelConfig.provider) {
+      case 'openrouter':
+        return openrouter(this.modelConfig.id);
+      case 'ollama':
+        return ollama(this.modelConfig.id);
+      default:
+        return deepseek(this.modelConfig.id);
+    }
   }
 }

@@ -2,12 +2,20 @@ export interface ModelConfig {
   id: string;
   label: string;
   tier: 'weak' | 'medium' | 'strong';
-  provider: 'deepseek' | 'openrouter';
+  provider: 'deepseek' | 'openrouter' | 'ollama';
   pricing: { input: number; output: number }; // per 1M tokens
   contextWindow: number; // max tokens the model accepts
 }
 
 export const MODELS: ModelConfig[] = [
+  {
+    id: 'llama3.2:3b',
+    label: 'Llama 3.2 3B (Local / Ollama)',
+    tier: 'weak',
+    provider: 'ollama',
+    pricing: { input: 0, output: 0 },
+    contextWindow: 131_072,
+  },
   {
     id: 'google/gemma-3n-e2b-it:free',
     label: 'Gemma 3n 2B (Overflow Demo)',
@@ -50,4 +58,4 @@ export const MODELS: ModelConfig[] = [
   },
 ];
 
-export const DEFAULT_MODEL = MODELS[2].id; // NVIDIA Nemotron Nano
+export const DEFAULT_MODEL = MODELS[3].id; // NVIDIA Nemotron Nano
