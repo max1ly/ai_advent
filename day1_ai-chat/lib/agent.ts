@@ -355,6 +355,14 @@ When answering questions:
         // Emit RAG sources if search_documents was called
         if (ragEnabled && finalSteps) {
           try {
+            console.log(`\x1b[35m[RAG Debug]\x1b[0m Steps count: ${finalSteps.length}`);
+            for (let i = 0; i < finalSteps.length; i++) {
+              const s = finalSteps[i];
+              console.log(`\x1b[35m[RAG Debug]\x1b[0m Step ${i}: toolResults=${s.toolResults.length}, toolCalls=${s.toolCalls.length}, finishReason=${s.finishReason}`);
+              for (const tr of s.toolResults) {
+                console.log(`\x1b[35m[RAG Debug]\x1b[0m   toolResult: toolName=${tr.toolName}, hasOutput=${!!tr.output}, output keys=${tr.output ? Object.keys(tr.output as Record<string, unknown>).join(',') : 'none'}`);
+              }
+            }
             // Check if the LLM indicated it couldn't find relevant info
             const finalText = await result.text;
             const refusalPatterns = [
@@ -591,7 +599,7 @@ When answering questions:
       case 'openrouter':
         return openrouter(this.modelConfig.id);
       case 'ollama':
-        return ollama(this.modelConfig.id);
+        return ollama.chat(this.modelConfig.id);
       default:
         return deepseek(this.modelConfig.id);
     }
