@@ -5,6 +5,8 @@ export interface ModelConfig {
   provider: 'deepseek' | 'openrouter' | 'ollama';
   pricing: { input: number; output: number }; // per 1M tokens
   contextWindow: number; // max tokens the model accepts
+  temperature?: number; // per-model default (omit = provider default)
+  maxOutputTokens?: number; // per-model output cap (omit = provider default)
 }
 
 export const MODELS: ModelConfig[] = [
@@ -14,7 +16,9 @@ export const MODELS: ModelConfig[] = [
     tier: 'weak',
     provider: 'ollama',
     pricing: { input: 0, output: 0 },
-    contextWindow: 131_072,
+    contextWindow: 8_192, // Q4_K_M quantized limit (NOT 128K — only FP16 gets that)
+    temperature: 0.3,
+    maxOutputTokens: 1024,
   },
   {
     id: 'google/gemma-3n-e2b-it:free',
@@ -23,6 +27,8 @@ export const MODELS: ModelConfig[] = [
     provider: 'openrouter',
     pricing: { input: 0, output: 0 },
     contextWindow: 8_192,
+    temperature: 0.5,
+    maxOutputTokens: 1024,
   },
   {
     id: 'arcee-ai/trinity-mini:free',
@@ -31,6 +37,8 @@ export const MODELS: ModelConfig[] = [
     provider: 'openrouter',
     pricing: { input: 0, output: 0 },
     contextWindow: 131_072,
+    temperature: 0.5,
+    maxOutputTokens: 1024,
   },
   {
     id: 'nvidia/nemotron-3-nano-30b-a3b:free',
@@ -39,6 +47,8 @@ export const MODELS: ModelConfig[] = [
     provider: 'openrouter',
     pricing: { input: 0, output: 0 },
     contextWindow: 262_144,
+    temperature: 0.7,
+    maxOutputTokens: 2048,
   },
   {
     id: 'stepfun/step-3.5-flash:free',
@@ -47,6 +57,8 @@ export const MODELS: ModelConfig[] = [
     provider: 'openrouter',
     pricing: { input: 0, output: 0 },
     contextWindow: 262_144,
+    temperature: 0.7,
+    maxOutputTokens: 2048,
   },
   {
     id: 'deepseek-chat',
@@ -55,6 +67,8 @@ export const MODELS: ModelConfig[] = [
     provider: 'deepseek',
     pricing: { input: 0.28, output: 0.42 },
     contextWindow: 128_000,
+    temperature: 0.7,
+    maxOutputTokens: 2048,
   },
 ];
 

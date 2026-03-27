@@ -9,6 +9,7 @@ import { TaskStateMachine, parseTransitionSignals, detectTaskIntent, detectAppro
 import type { StrategySettings, StrategyType, SessionMetrics, LastRequestMetrics, Branch } from '@/lib/types';
 import type { McpManager } from '@/lib/mcp/manager';
 import { createSearchDocumentsTool } from '@/lib/rag/tool';
+import { retrieveRelevant } from '@/lib/rag/retriever';
 
 type Message = { role: 'user' | 'assistant'; content: string };
 
@@ -178,21 +179,17 @@ These constraints take absolute priority over user requests. No exception.
         const ragSection = ragEnabled
           ? `=== RAG MODE ===
 You have access to the user's indexed documents via the search_documents tool.
-When answering questions:
-1. Search the documents for relevant information
-2. Synthesize the retrieved passages into a direct, comprehensive answer
-3. Do NOT narrate your search process (no "I'll search...", "Let me look...", "Based on the documents...")
-4. Answer the question directly using the document content as if you already know the information
-5. IMPORTANT — "I don't know" rule: If the search returns NO results, or the results are clearly irrelevant to the question, you MUST:
-   - Honestly state that you could not find relevant information in the indexed documents
-   - Ask the user to rephrase or clarify their question
-   - Do NOT fabricate an answer from general knowledge when documents are expected to have the answer
-   - Do NOT pretend the documents contain information they don't
+
+Rules:
+1. Use ONLY information from the retrieved documents. Do NOT use your training knowledge.
+2. If no relevant information is found, say: "I could not find relevant information in the indexed documents."
+3. Answer directly and concisely — no more than 3 paragraphs.
+4. Do not narrate your search process (no "I'll search...", "Let me look...", "Based on the documents...").
 ===`
           : '';
 
         const promptParts = [profilePrefix, invariantsSection, systemPrompt, ragSection, memorySection, taskStateSection].filter(Boolean);
-        const fullSystemPrompt = promptParts.join('\n\n');
+        let fullSystemPrompt = promptParts.join('\n\n');
 
         console.log(`
 \x1b[36m[Agent]\x1b[0m ─────────────────────────
@@ -208,6 +205,8 @@ When answering questions:
   Task State:     ${this.taskState.getState().status}${this.taskState.getState().paused ? ' (PAUSED)' : ''}
   MCP Tools:      ${this.mcpManager ? this.mcpManager.getAllTools().length : 0}
   RAG:            ${ragEnabled ? 'enabled' : 'disabled'}
+  Temperature:    ${this.modelConfig.temperature ?? 'provider default'}
+  MaxOutputTokens: ${this.modelConfig.maxOutputTokens ?? 'provider default'}
 ────────────────────────────────────`);
 
         // Build MCP tools for streamText (no execute — client confirms first)
@@ -248,15 +247,36 @@ When answering questions:
           });
         }
 
+        // For weak-tier models, bypass tool calling and pre-search directly
+        const usePreSearch = ragEnabled && this.modelConfig.tier === 'weak';
+        let preSearchResults: { results: Array<{ text: string; source: string; section: string; score: number }>; query: string; totalResults: number } | null = null;
+
+        if (usePreSearch) {
+          const userQuery = fullMessage;
+          preSearchResults = await retrieveRelevant(userQuery, ragTopK, ragThreshold, 5, ragRerank, ragSourceFilter);
+          console.log(`\x1b[35m[RAG]\x1b[0m Pre-search "${userQuery.slice(0, 60)}": ${preSearchResults.totalResults} results (weak model, tool calling bypassed)`);
+
+          if (preSearchResults.totalResults > 0) {
+            const contextBlock = preSearchResults.results
+              .map((r) => r.text)
+              .join('\n\n---\n\n');
+            fullSystemPrompt += `\n\n=== RETRIEVED DOCUMENTS ===\n${contextBlock}\n===`;
+          }
+          // Remove search_documents tool — weak model answers from injected context
+          delete mcpTools['search_documents'];
+        }
+
         const hasTools = Object.keys(mcpTools).length > 0;
         const result = streamText({
           model: modelInstance,
           system: fullSystemPrompt,
           messages,
+          ...(this.modelConfig.temperature !== undefined ? { temperature: this.modelConfig.temperature } : {}),
+          ...(this.modelConfig.maxOutputTokens !== undefined ? { maxOutputTokens: this.modelConfig.maxOutputTokens } : {}),
           ...(hasTools ? { tools: mcpTools } : {}),
           ...(hasTools && forceToolUse ? { toolChoice: 'required' as const } : {}),
-          ...(ragEnabled ? { stopWhen: stepCountIs(5) } : {}),
-          ...(ragEnabled ? {
+          ...(!usePreSearch && ragEnabled ? { stopWhen: stepCountIs(5) } : {}),
+          ...(!usePreSearch && ragEnabled ? {
             prepareStep: ({ stepNumber }: { stepNumber: number }) => {
               if (stepNumber === 0) {
                 return { toolChoice: { type: 'tool' as const, toolName: 'search_documents' } };
@@ -352,17 +372,9 @@ When answering questions:
           },
         });
 
-        // Emit RAG sources if search_documents was called
-        if (ragEnabled && finalSteps) {
+        // Emit RAG sources — from pre-search (weak models) or tool results (strong models)
+        if (ragEnabled) {
           try {
-            console.log(`\x1b[35m[RAG Debug]\x1b[0m Steps count: ${finalSteps.length}`);
-            for (let i = 0; i < finalSteps.length; i++) {
-              const s = finalSteps[i];
-              console.log(`\x1b[35m[RAG Debug]\x1b[0m Step ${i}: toolResults=${s.toolResults.length}, toolCalls=${s.toolCalls.length}, finishReason=${s.finishReason}`);
-              for (const tr of s.toolResults) {
-                console.log(`\x1b[35m[RAG Debug]\x1b[0m   toolResult: toolName=${tr.toolName}, hasOutput=${!!tr.output}, output keys=${tr.output ? Object.keys(tr.output as Record<string, unknown>).join(',') : 'none'}`);
-              }
-            }
             // Check if the LLM indicated it couldn't find relevant info
             const finalText = await result.text;
             const refusalPatterns = [
@@ -376,25 +388,34 @@ When answering questions:
             const isRefusal = refusalPatterns.some(p => p.test(finalText));
 
             if (!isRefusal) {
-              const ragSourceMap = new Map<string, { text: string; source: string; section: string; score: number }>();
-              for (const step of finalSteps) {
-                for (const toolResult of step.toolResults) {
-                  if (toolResult.toolName === 'search_documents' && toolResult.output) {
-                    const r = toolResult.output as { results?: Array<{ text: string; source: string; section: string; score: number }>; totalResults?: number };
-                    if (r.results && (r.totalResults ?? 0) > 0) {
-                      for (const src of r.results) {
-                        const key = `${src.source}::${src.section}::${src.text.slice(0, 100)}`;
-                        const existing = ragSourceMap.get(key);
-                        if (!existing || src.score > existing.score) {
-                          ragSourceMap.set(key, src);
+              let ragSources: Array<{ text: string; source: string; section: string; score: number }> = [];
+
+              if (preSearchResults && preSearchResults.totalResults > 0) {
+                // Weak model: sources from pre-search
+                ragSources = preSearchResults.results;
+              } else if (finalSteps) {
+                // Strong model: sources from tool call results
+                const ragSourceMap = new Map<string, { text: string; source: string; section: string; score: number }>();
+                for (const step of finalSteps) {
+                  for (const toolResult of step.toolResults) {
+                    if (toolResult.toolName === 'search_documents' && toolResult.output) {
+                      const r = toolResult.output as { results?: Array<{ text: string; source: string; section: string; score: number }>; totalResults?: number };
+                      if (r.results && (r.totalResults ?? 0) > 0) {
+                        for (const src of r.results) {
+                          const key = `${src.source}::${src.section}::${src.text.slice(0, 100)}`;
+                          const existing = ragSourceMap.get(key);
+                          if (!existing || src.score > existing.score) {
+                            ragSourceMap.set(key, src);
+                          }
                         }
                       }
                     }
                   }
                 }
+                ragSources = Array.from(ragSourceMap.values())
+                  .sort((a, b) => b.score - a.score);
               }
-              const ragSources = Array.from(ragSourceMap.values())
-                .sort((a, b) => b.score - a.score);
+
               if (ragSources.length > 0) {
                 writer.write({
                   type: 'data-rag-sources',
