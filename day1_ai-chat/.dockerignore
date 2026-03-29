@@ -1,0 +1,14 @@
+node_modules
+.next
+data
+.git
+.gitignore
+*.md
+.env*
+.DS_Store
+.vscode
+.idea
+.planning
+docs
+coverage
+.claude
