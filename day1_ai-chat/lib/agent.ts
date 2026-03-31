@@ -10,8 +10,21 @@ import type { StrategySettings, StrategyType, SessionMetrics, LastRequestMetrics
 import type { McpManager } from '@/lib/mcp/manager';
 import { createSearchDocumentsTool } from '@/lib/rag/tool';
 import { retrieveRelevant } from '@/lib/rag/retriever';
+import { indexProjectDocs, getProjectDocSources, getDevAssistantTools, DEV_ASSISTANT_PROMPT } from '@/lib/dev-assistant';
 
 type Message = { role: 'user' | 'assistant'; content: string };
+
+export interface ChatOptions {
+  profileId?: number;
+  invariants?: string[];
+  forceToolUse?: boolean;
+  ragEnabled?: boolean;
+  ragThreshold?: number;
+  ragTopK?: number;
+  ragRerank?: boolean;
+  ragSourceFilter?: string[];
+  devAssistant?: boolean;
+}
 
 export interface ChatFile {
   filename: string;
@@ -92,7 +105,17 @@ export class ChatAgent {
     this.mcpManager = opts?.mcpManager ?? null;
   }
 
-  chat(userMessage: string, files?: ChatFile[], profileId?: number, invariants?: string[], forceToolUse?: boolean, ragEnabled?: boolean, ragThreshold?: number, ragTopK?: number, ragRerank?: boolean, ragSourceFilter?: string[]) {
+  chat(userMessage: string, files?: ChatFile[], options?: ChatOptions) {
+    const profileId = options?.profileId;
+    const invariants = options?.invariants;
+    const forceToolUse = options?.forceToolUse;
+    const ragEnabled = options?.ragEnabled || options?.devAssistant;
+    const ragThreshold = options?.ragThreshold;
+    const ragTopK = options?.ragTopK;
+    const ragRerank = options?.ragRerank;
+    const ragSourceFilter = options?.ragSourceFilter;
+    const devAssistant = options?.devAssistant;
+
     let fullMessage = userMessage;
     if (files?.length) {
       const extracted = extractTextFromFiles(files);
@@ -205,6 +228,7 @@ Rules:
   Task State:     ${this.taskState.getState().status}${this.taskState.getState().paused ? ' (PAUSED)' : ''}
   MCP Tools:      ${this.mcpManager ? this.mcpManager.getAllTools().length : 0}
   RAG:            ${ragEnabled ? 'enabled' : 'disabled'}
+  DevAssistant:   ${devAssistant ? 'active' : 'off'}
   Temperature:    ${this.modelConfig.temperature ?? 'provider default'}
   MaxOutputTokens: ${this.modelConfig.maxOutputTokens ?? 'provider default'}
 ────────────────────────────────────`);
@@ -223,8 +247,27 @@ Rules:
           }
         }
 
-        // Register RAG search tool when enabled (has execute handler — auto-runs server-side)
-        if (ragEnabled) {
+        // Dev assistant mode: index project docs, register git tools, override prompt
+        if (devAssistant) {
+          await indexProjectDocs();
+          const projectSources = getProjectDocSources();
+
+          // Override system prompt for dev assistant
+          fullSystemPrompt = DEV_ASSISTANT_PROMPT;
+
+          // Register git tools (with execute handlers — auto-run)
+          const gitTools = getDevAssistantTools();
+          Object.assign(mcpTools, gitTools);
+
+          // Register RAG search tool filtered to project docs only
+          mcpTools['search_documents'] = createSearchDocumentsTool({
+            threshold: ragThreshold ?? 0.3,
+            topK: ragTopK ?? 10,
+            rerank: ragRerank ?? true,
+            sourceFilter: projectSources.length > 0 ? projectSources : undefined,
+          });
+        } else if (ragEnabled) {
+          // Normal RAG mode
           mcpTools['search_documents'] = createSearchDocumentsTool({
             threshold: ragThreshold,
             topK: ragTopK,
@@ -253,7 +296,8 @@ Rules:
 
         if (usePreSearch) {
           const userQuery = fullMessage;
-          preSearchResults = await retrieveRelevant(userQuery, ragTopK, ragThreshold, 5, ragRerank, ragSourceFilter);
+          const preSearchSourceFilter = devAssistant ? getProjectDocSources() : ragSourceFilter;
+          preSearchResults = await retrieveRelevant(userQuery, ragTopK, ragThreshold, 5, ragRerank, preSearchSourceFilter);
           console.log(`\x1b[35m[RAG]\x1b[0m Pre-search "${userQuery.slice(0, 60)}": ${preSearchResults.totalResults} results (weak model, tool calling bypassed)`);
 
           if (preSearchResults.totalResults > 0) {
@@ -276,7 +320,7 @@ Rules:
           ...(hasTools ? { tools: mcpTools } : {}),
           ...(hasTools && forceToolUse ? { toolChoice: 'required' as const } : {}),
           ...(!usePreSearch && ragEnabled ? { stopWhen: stepCountIs(5) } : {}),
-          ...(!usePreSearch && ragEnabled ? {
+          ...(!usePreSearch && ragEnabled && !devAssistant ? {
             prepareStep: ({ stepNumber }: { stepNumber: number }) => {
               if (stepNumber === 0) {
                 return { toolChoice: { type: 'tool' as const, toolName: 'search_documents' } };

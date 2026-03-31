@@ -125,3 +125,36 @@ export async function searchChunks(
     vector: Array.from(r.vector as Iterable<number>),
   }));
 }
+
+/**
+ * Delete all chunks for a specific source file.
+ */
+export async function deleteBySource(source: string): Promise<void> {
+  const db = await getDb();
+  const tableNames = await db.tableNames();
+
+  if (!tableNames.includes(TABLE_NAME)) {
+    return; // nothing to delete
+  }
+
+  const escaped = source.replace(/'/g, "''");
+  const table = await db.openTable(TABLE_NAME);
+  await table.delete(`source = '${escaped}'`);
+  console.log(`[RAG] Deleted chunks for "${source}"`);
+}
+
+/**
+ * Delete all indexed documents (all rows from the table).
+ */
+export async function deleteAll(): Promise<void> {
+  const db = await getDb();
+  const tableNames = await db.tableNames();
+
+  if (!tableNames.includes(TABLE_NAME)) {
+    return; // nothing to delete
+  }
+
+  const table = await db.openTable(TABLE_NAME);
+  await table.delete('1=1');
+  console.log('[RAG] Deleted all indexed documents');
+}

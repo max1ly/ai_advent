@@ -19,6 +19,7 @@ export default function IndexDialog({ isOpen, onClose, selectedDocs, onSelectedD
   const [error, setError] = useState<string | null>(null);
   const [indexedFiles, setIndexedFiles] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null); // filename being deleted, or 'all'
 
   // Fetch indexed files when dialog opens
   useEffect(() => {
@@ -80,6 +81,53 @@ export default function IndexDialog({ isOpen, onClose, selectedDocs, onSelectedD
       setIsIndexing(false);
     }
   }, [file]);
+
+  const handleDelete = useCallback(async (source: string) => {
+    setIsDeleting(source);
+    setError(null);
+    try {
+      const res = await fetch('/api/index', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || `Delete failed: ${res.status}`);
+        return;
+      }
+      setIndexedFiles(prev => prev.filter(f => f !== source));
+      onSelectedDocsChange(selectedDocs.filter(d => d !== source));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete document');
+    } finally {
+      setIsDeleting(null);
+    }
+  }, [selectedDocs, onSelectedDocsChange]);
+
+  const handleDeleteAll = useCallback(async () => {
+    setIsDeleting('all');
+    setError(null);
+    try {
+      const res = await fetch('/api/index', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ all: true }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || `Clear all failed: ${res.status}`);
+        return;
+      }
+      setIndexedFiles([]);
+      onSelectedDocsChange([]);
+      setStats(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to clear index');
+    } finally {
+      setIsDeleting(null);
+    }
+  }, [onSelectedDocsChange]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -143,35 +191,62 @@ export default function IndexDialog({ isOpen, onClose, selectedDocs, onSelectedD
                   return (
                     <li
                       key={name}
-                      onClick={() => {
-                        if (isSelected) {
-                          onSelectedDocsChange(selectedDocs.filter(d => d !== name));
-                        } else {
-                          onSelectedDocsChange([...selectedDocs, name]);
-                        }
-                      }}
-                      className={`flex items-center gap-2 text-sm cursor-pointer rounded px-1.5 py-0.5 transition-colors ${
+                      className={`flex items-center gap-2 text-sm rounded px-1.5 py-0.5 transition-colors ${
                         isSelected
                           ? 'text-emerald-800 bg-emerald-50'
                           : 'text-gray-500 hover:bg-gray-100'
                       }`}
                     >
-                      <span className={`w-3.5 h-3.5 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
-                        isSelected
-                          ? 'bg-emerald-500 border-emerald-500'
-                          : 'border-gray-300'
-                      }`}>
-                        {isSelected && (
-                          <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      <span
+                        onClick={() => {
+                          if (isSelected) {
+                            onSelectedDocsChange(selectedDocs.filter(d => d !== name));
+                          } else {
+                            onSelectedDocsChange([...selectedDocs, name]);
+                          }
+                        }}
+                        className="flex items-center gap-2 flex-1 cursor-pointer"
+                      >
+                        <span className={`w-3.5 h-3.5 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
+                          isSelected
+                            ? 'bg-emerald-500 border-emerald-500'
+                            : 'border-gray-300'
+                        }`}>
+                          {isSelected && (
+                            <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </span>
+                        {name}
+                      </span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDelete(name); }}
+                        disabled={isDeleting !== null}
+                        className="text-gray-300 hover:text-red-500 disabled:opacity-30 p-0.5 flex-shrink-0 transition-colors"
+                        title={`Remove ${name} from index`}
+                      >
+                        {isDeleting === name ? (
+                          <span className="w-3 h-3 border border-gray-300 border-t-gray-600 rounded-full animate-spin inline-block" />
+                        ) : (
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                           </svg>
                         )}
-                      </span>
-                      {name}
+                      </button>
                     </li>
                   );
                 })}
               </ul>
+              {indexedFiles.length > 0 && (
+                <button
+                  onClick={handleDeleteAll}
+                  disabled={isDeleting !== null}
+                  className="mt-2 w-full px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-40 transition-colors"
+                >
+                  {isDeleting === 'all' ? 'Clearing...' : 'Clear All'}
+                </button>
+              )}
             </div>
           )}
 

@@ -354,7 +354,7 @@ export default function Home() {
   }, [invariants]);
 
   // Send a message to the LLM and stream the response
-  const sendAndStream = useCallback(async (text: string, opts?: { filesPayload?: Array<{ filename: string; mediaType: string; data: string }>; forceToolUse?: boolean }) => {
+  const sendAndStream = useCallback(async (text: string, opts?: { filesPayload?: Array<{ filename: string; mediaType: string; data: string }>; forceToolUse?: boolean; devAssistant?: boolean }) => {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -372,6 +372,7 @@ export default function Home() {
         ragTopK,
         ragRerank,
         ragSourceFilter: ragSourceFilter.length > 0 ? ragSourceFilter : undefined,
+        devAssistant: opts?.devAssistant,
       }),
     });
 
@@ -389,6 +390,38 @@ export default function Home() {
       if ((!text && pendingFiles.length === 0) || status !== 'ready') return;
       toolChainDepthRef.current = 0;
       toolChainResultsRef.current = [];
+
+      // /help command — developer assistant mode
+      if (text.startsWith('/help')) {
+        const question = text.slice(5).trim() || 'What is this project?';
+        setInput('');
+        setError(null);
+        const helpUserMsg: DisplayMessage = {
+          id: String(++msgCounterRef.current),
+          role: 'user',
+          content: text,
+        };
+        const helpAssistantMsg: DisplayMessage = {
+          id: String(++msgCounterRef.current),
+          role: 'assistant',
+          content: '',
+        };
+        setMessages((prev) => [...prev, helpUserMsg, helpAssistantMsg]);
+        setStatus('submitted');
+        try {
+          await sendAndStream(question, { devAssistant: true });
+        } catch (err) {
+          setError(err instanceof Error ? err : new Error(String(err)));
+          setMessages((prev) => {
+            const last = prev[prev.length - 1];
+            if (last?.role === 'assistant' && !last.content) return prev.slice(0, -1);
+            return prev;
+          });
+        } finally {
+          setStatus('ready');
+        }
+        return;
+      }
 
       // Capture and clear pending files
       const filesToSend = [...pendingFiles];

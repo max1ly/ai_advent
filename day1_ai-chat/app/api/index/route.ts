@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { PDFParse } from 'pdf-parse';
 import { chunkDocument } from '@/lib/rag/chunker';
 import { embedTexts } from '@/lib/rag/embedder';
-import { insertChunks, getIndexedFiles } from '@/lib/rag/store';
+import { insertChunks, getIndexedFiles, deleteBySource, deleteAll } from '@/lib/rag/store';
+import { resetProjectIndex } from '@/lib/dev-assistant';
 import type { IndexingStats } from '@/lib/rag/types';
 
 export async function GET() {
@@ -100,6 +101,36 @@ export async function POST(req: Request) {
   } catch (err) {
     console.error('[RAG] Indexing error:', err);
     const message = err instanceof Error ? err.message : 'Unknown indexing error';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    const body = await req.json();
+    const { source, all } = body as { source?: string; all?: boolean };
+
+    if (all) {
+      await deleteAll();
+      resetProjectIndex();
+      console.log('[RAG] Cleared entire index');
+      return NextResponse.json({ deleted: true, all: true });
+    }
+
+    if (!source || typeof source !== 'string' || !source.trim()) {
+      return NextResponse.json(
+        { error: "Missing 'source' or 'all' in request body" },
+        { status: 400 },
+      );
+    }
+
+    await deleteBySource(source);
+    resetProjectIndex();
+    console.log(`[RAG] Deleted "${source}" from index`);
+    return NextResponse.json({ deleted: true, source });
+  } catch (err) {
+    console.error('[RAG] Delete error:', err);
+    const message = err instanceof Error ? err.message : 'Unknown delete error';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
