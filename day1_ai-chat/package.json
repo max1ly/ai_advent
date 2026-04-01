@@ -39,7 +39,9 @@
     "typescript": "^5.9.3"
   },
   "devDependencies": {
+    "@huggingface/transformers": "^4.0.0",
     "@modelcontextprotocol/server-everything": "^2026.1.26",
+    "@octokit/rest": "^22.0.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/better-sqlite3": "^7.6.13",

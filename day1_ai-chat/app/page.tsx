@@ -354,7 +354,7 @@ export default function Home() {
   }, [invariants]);
 
   // Send a message to the LLM and stream the response
-  const sendAndStream = useCallback(async (text: string, opts?: { filesPayload?: Array<{ filename: string; mediaType: string; data: string }>; forceToolUse?: boolean; devAssistant?: boolean }) => {
+  const sendAndStream = useCallback(async (text: string, opts?: { filesPayload?: Array<{ filename: string; mediaType: string; data: string }>; forceToolUse?: boolean; devAssistant?: boolean; diffReview?: boolean }) => {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -373,6 +373,7 @@ export default function Home() {
         ragRerank,
         ragSourceFilter: ragSourceFilter.length > 0 ? ragSourceFilter : undefined,
         devAssistant: opts?.devAssistant,
+        diffReview: opts?.diffReview,
       }),
     });
 
@@ -410,6 +411,37 @@ export default function Home() {
         setStatus('submitted');
         try {
           await sendAndStream(question, { devAssistant: true });
+        } catch (err) {
+          setError(err instanceof Error ? err : new Error(String(err)));
+          setMessages((prev) => {
+            const last = prev[prev.length - 1];
+            if (last?.role === 'assistant' && !last.content) return prev.slice(0, -1);
+            return prev;
+          });
+        } finally {
+          setStatus('ready');
+        }
+        return;
+      }
+
+      // /diff command — code review mode
+      if (text.startsWith('/diff')) {
+        setInput('');
+        setError(null);
+        const diffUserMsg: DisplayMessage = {
+          id: String(++msgCounterRef.current),
+          role: 'user',
+          content: text,
+        };
+        const diffAssistantMsg: DisplayMessage = {
+          id: String(++msgCounterRef.current),
+          role: 'assistant',
+          content: '',
+        };
+        setMessages((prev) => [...prev, diffUserMsg, diffAssistantMsg]);
+        setStatus('submitted');
+        try {
+          await sendAndStream(text, { diffReview: true });
         } catch (err) {
           setError(err instanceof Error ? err : new Error(String(err)));
           setMessages((prev) => {

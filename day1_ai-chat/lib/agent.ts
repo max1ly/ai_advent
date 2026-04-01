@@ -10,7 +10,7 @@ import type { StrategySettings, StrategyType, SessionMetrics, LastRequestMetrics
 import type { McpManager } from '@/lib/mcp/manager';
 import { createSearchDocumentsTool } from '@/lib/rag/tool';
 import { retrieveRelevant } from '@/lib/rag/retriever';
-import { indexProjectDocs, getProjectDocSources, getDevAssistantTools, DEV_ASSISTANT_PROMPT } from '@/lib/dev-assistant';
+import { indexProjectDocs, getProjectDocSources, getDevAssistantTools, DEV_ASSISTANT_PROMPT, getDiff, DIFF_REVIEW_PROMPT } from '@/lib/dev-assistant';
 
 type Message = { role: 'user' | 'assistant'; content: string };
 
@@ -24,6 +24,7 @@ export interface ChatOptions {
   ragRerank?: boolean;
   ragSourceFilter?: string[];
   devAssistant?: boolean;
+  diffReview?: boolean;
 }
 
 export interface ChatFile {
@@ -115,6 +116,7 @@ export class ChatAgent {
     const ragRerank = options?.ragRerank;
     const ragSourceFilter = options?.ragSourceFilter;
     const devAssistant = options?.devAssistant;
+    const diffReview = options?.diffReview;
 
     let fullMessage = userMessage;
     if (files?.length) {
@@ -274,6 +276,29 @@ Rules:
             rerank: ragRerank,
             sourceFilter: ragSourceFilter,
           });
+        }
+
+        // Diff review mode: get git diff and override prompt
+        if (diffReview) {
+          // Parse commit hashes from message: "/diff hash1 hash2" or "/diff hash1" or "/diff"
+          const diffArgs = fullMessage.trim().split(/\s+/).slice(1); // skip "/diff"
+          const hash1 = diffArgs[0] || undefined;
+          const hash2 = diffArgs[1] || undefined;
+
+          const diffText = await getDiff(hash1, hash2);
+
+          if (!diffText || diffText === '') {
+            fullSystemPrompt = 'No changes found in the diff. Tell the user there are no changes to review.';
+          } else {
+            fullSystemPrompt = DIFF_REVIEW_PROMPT;
+            // Replace the user message with the diff content
+            const lastMsg = messages[messages.length - 1];
+            if (lastMsg && lastMsg.role === 'user') {
+              lastMsg.content = `## Git Diff\n\n\`\`\`diff\n${diffText}\n\`\`\``;
+            }
+          }
+
+          console.log(`\x1b[36m[Agent]\x1b[0m Diff review: ${hash1 ?? '(working tree)'} → ${hash2 ?? 'HEAD'} (${diffText.length} chars)`);
         }
 
         // Add pipeline_complete tool so LLM can signal "done" even with toolChoice: required

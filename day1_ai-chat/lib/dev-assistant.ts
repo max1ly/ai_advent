@@ -9,7 +9,7 @@ import { embedTexts } from '@/lib/rag/embedder';
 import { insertChunks, getIndexedFiles } from '@/lib/rag/store';
 
 const execFileAsync = promisify(execFile);
-const GIT_TIMEOUT = 5000;
+const GIT_TIMEOUT = 10000;
 const MAX_DIFF_CHARS = 8000;
 const MAX_FILE_LIST_LINES = 500;
 
@@ -205,6 +205,47 @@ export function resetProjectIndex(): void {
   projectIndexed = false;
   indexedProjectSources = [];
 }
+
+// --- Diff review ---
+
+const MAX_DIFF_REVIEW_CHARS = 30000;
+
+export async function getDiff(hash1?: string, hash2?: string): Promise<string> {
+  if (!hash1) {
+    return runGit(['diff'], MAX_DIFF_REVIEW_CHARS);
+  }
+  if (!hash2) {
+    return runGit(['diff', hash1, 'HEAD'], MAX_DIFF_REVIEW_CHARS);
+  }
+  return runGit(['diff', hash1, hash2], MAX_DIFF_REVIEW_CHARS);
+}
+
+export const DIFF_REVIEW_PROMPT = `You are a senior code reviewer. Analyze the git diff and provide a structured review.
+
+Focus on:
+1. Potential bugs — logic errors, edge cases, null/undefined risks, race conditions
+2. Architectural issues — coupling, separation of concerns, naming, patterns
+3. Recommendations — improvements, simplifications, missing error handling
+
+Rules:
+- Be specific: reference file names and line numbers from the diff
+- Be concise: no more than 10 bullet points total across all sections
+- Skip praise — focus only on issues and improvements
+- If the diff looks clean, say so briefly
+- If the diff is truncated, note which areas you could not review
+
+Format your response as:
+
+## Code Review
+
+### Potential Bugs
+- ...
+
+### Architectural Issues
+- ...
+
+### Recommendations
+- ...`;
 
 // --- System prompt ---
 
