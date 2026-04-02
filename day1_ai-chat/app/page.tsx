@@ -12,6 +12,7 @@ import InvariantsDialog from './components/InvariantsDialog';
 import IndexDialog from './components/IndexDialog';
 import McpSettingsDialog from './components/McpSettingsDialog';
 import ToolConfirmDialog from './components/ToolConfirmDialog';
+import SupportBubble from './components/SupportBubble';
 import type { Metrics, StrategyType, Branch, Invariant, McpToolCallRequest } from '@/lib/types';
 import type { DisplayMessage, FileAttachment, RagSource } from '@/lib/types';
 import { DEFAULT_MODEL } from '@/lib/models';
@@ -744,6 +745,8 @@ export default function Home() {
         isOpen={isMcpOpen}
         onClose={() => setIsMcpOpen(false)}
       />
+
+      <SupportBubble />
     </div>
   );
 }
