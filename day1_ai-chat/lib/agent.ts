@@ -10,7 +10,7 @@ import type { StrategySettings, StrategyType, SessionMetrics, LastRequestMetrics
 import type { McpManager } from '@/lib/mcp/manager';
 import { createSearchDocumentsTool } from '@/lib/rag/tool';
 import { retrieveRelevant } from '@/lib/rag/retriever';
-import { indexProjectDocs, getProjectDocSources, getDevAssistantTools, DEV_ASSISTANT_PROMPT, getDiff, DIFF_REVIEW_PROMPT } from '@/lib/dev-assistant';
+import { indexProjectDocs, getProjectDocSources, getDevAssistantTools, DEV_ASSISTANT_PROMPT, getDiff, DIFF_REVIEW_PROMPT, getPendingWritesForResponse } from '@/lib/dev-assistant';
 
 type Message = { role: 'user' | 'assistant'; content: string };
 
@@ -23,7 +23,6 @@ export interface ChatOptions {
   ragTopK?: number;
   ragRerank?: boolean;
   ragSourceFilter?: string[];
-  devAssistant?: boolean;
   diffReview?: boolean;
 }
 
@@ -110,12 +109,11 @@ export class ChatAgent {
     const profileId = options?.profileId;
     const invariants = options?.invariants;
     const forceToolUse = options?.forceToolUse;
-    const ragEnabled = options?.ragEnabled || options?.devAssistant;
+    const ragEnabled = options?.ragEnabled;
     const ragThreshold = options?.ragThreshold;
     const ragTopK = options?.ragTopK;
     const ragRerank = options?.ragRerank;
     const ragSourceFilter = options?.ragSourceFilter;
-    const devAssistant = options?.devAssistant;
     const diffReview = options?.diffReview;
 
     let fullMessage = userMessage;
@@ -230,7 +228,7 @@ Rules:
   Task State:     ${this.taskState.getState().status}${this.taskState.getState().paused ? ' (PAUSED)' : ''}
   MCP Tools:      ${this.mcpManager ? this.mcpManager.getAllTools().length : 0}
   RAG:            ${ragEnabled ? 'enabled' : 'disabled'}
-  DevAssistant:   ${devAssistant ? 'active' : 'off'}
+  DevAssistant:   always-on
   Temperature:    ${this.modelConfig.temperature ?? 'provider default'}
   MaxOutputTokens: ${this.modelConfig.maxOutputTokens ?? 'provider default'}
 ────────────────────────────────────`);
@@ -249,34 +247,33 @@ Rules:
           }
         }
 
-        // Dev assistant mode: index project docs, register git tools, override prompt
-        if (devAssistant) {
-          await indexProjectDocs();
-          const projectSources = getProjectDocSources();
+        // Always register dev assistant tools + index project docs
+        try {
+          await Promise.race([
+            indexProjectDocs(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Indexing timed out (5s)')), 5000)),
+          ]);
+        } catch (err) {
+          console.error('\x1b[31m[Agent]\x1b[0m Project doc indexing failed (Ollama may not be running):', err instanceof Error ? err.message : err);
+        }
+        const projectSources = getProjectDocSources();
+        const gitTools = getDevAssistantTools();
+        Object.assign(mcpTools, gitTools);
 
-          // Override system prompt for dev assistant
-          fullSystemPrompt = DEV_ASSISTANT_PROMPT;
-
-          // Register git tools (with execute handlers — auto-run)
-          const gitTools = getDevAssistantTools();
-          Object.assign(mcpTools, gitTools);
-
-          // Register RAG search tool filtered to project docs only
+        // Register search_documents tool (only if we have sources or RAG is enabled)
+        if (projectSources.length > 0 || ragEnabled) {
           mcpTools['search_documents'] = createSearchDocumentsTool({
             threshold: ragThreshold ?? 0.3,
             topK: ragTopK ?? 10,
             rerank: ragRerank ?? true,
-            sourceFilter: projectSources.length > 0 ? projectSources : undefined,
-          });
-        } else if (ragEnabled) {
-          // Normal RAG mode
-          mcpTools['search_documents'] = createSearchDocumentsTool({
-            threshold: ragThreshold,
-            topK: ragTopK,
-            rerank: ragRerank,
-            sourceFilter: ragSourceFilter,
+            sourceFilter: ragEnabled && ragSourceFilter && ragSourceFilter.length > 0
+              ? ragSourceFilter
+              : (projectSources.length > 0 ? projectSources : undefined),
           });
         }
+
+        // Append dev assistant instructions to system prompt
+        fullSystemPrompt += '\n\n' + DEV_ASSISTANT_PROMPT;
 
         // Diff review mode: get git diff and override prompt
         if (diffReview) {
@@ -321,7 +318,7 @@ Rules:
 
         if (usePreSearch) {
           const userQuery = fullMessage;
-          const preSearchSourceFilter = devAssistant ? getProjectDocSources() : ragSourceFilter;
+          const preSearchSourceFilter = ragSourceFilter;
           preSearchResults = await retrieveRelevant(userQuery, ragTopK, ragThreshold, 5, ragRerank, preSearchSourceFilter);
           console.log(`\x1b[35m[RAG]\x1b[0m Pre-search "${userQuery.slice(0, 60)}": ${preSearchResults.totalResults} results (weak model, tool calling bypassed)`);
 
@@ -344,8 +341,8 @@ Rules:
           ...(this.modelConfig.maxOutputTokens !== undefined ? { maxOutputTokens: this.modelConfig.maxOutputTokens } : {}),
           ...(hasTools ? { tools: mcpTools } : {}),
           ...(hasTools && forceToolUse ? { toolChoice: 'required' as const } : {}),
-          ...(!usePreSearch && ragEnabled ? { stopWhen: stepCountIs(5) } : {}),
-          ...(!usePreSearch && ragEnabled && !devAssistant ? {
+          stopWhen: stepCountIs(15),
+          ...(!usePreSearch && ragEnabled ? {
             prepareStep: ({ stepNumber }: { stepNumber: number }) => {
               if (stepNumber === 0) {
                 return { toolChoice: { type: 'tool' as const, toolName: 'search_documents' } };
@@ -408,12 +405,30 @@ Rules:
           },
         });
 
-        // Await merge so the stream completes before we write data events
-        await writer.merge(result.toUIMessageStream());
+        // merge() returns void (fire-and-forget) — it does NOT await the stream.
+        // We must await result.usage to ensure the stream is fully consumed
+        // and all tool execute handlers have run before reading pending writes.
+        writer.merge(result.toUIMessageStream());
 
-        // Stream is done — writer is still open. Emit metrics and RAG sources.
         const finalUsage = await result.usage;
         const finalSteps = await result.steps;
+
+        // Stream is done — all tools have executed. Emit pending writes, metrics, and RAG sources.
+
+        const pendingWriteEvents = getPendingWritesForResponse();
+        console.log(`\x1b[36m[Agent]\x1b[0m Pending writes to emit: ${pendingWriteEvents.length}`);
+        for (const pw of pendingWriteEvents) {
+          console.log(`\x1b[36m[Agent]\x1b[0m Emitting data-pending-write for ${pw.path} (id: ${pw.id})`);
+          writer.write({
+            type: 'data-pending-write',
+            data: {
+              writeId: pw.id,
+              path: pw.path,
+              diff: pw.diff,
+              isNewFile: pw.isNewFile,
+            },
+          });
+        }
 
         const inputTokens = finalUsage?.inputTokens ?? 0;
         const outputTokens = finalUsage?.outputTokens ?? 0;

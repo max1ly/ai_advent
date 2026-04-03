@@ -3,7 +3,7 @@ import { getOrCreateAgent } from '@/lib/sessions';
 import type { StrategyType } from '@/lib/types';
 
 export async function POST(req: Request) {
-  const { message, sessionId, model, files, strategy, windowSize, profileId, invariants, forceToolUse, ragEnabled, ragThreshold, ragTopK, ragRerank, ragSourceFilter, devAssistant, diffReview } = await req.json();
+  const { message, sessionId, model, files, strategy, windowSize, profileId, invariants, forceToolUse, ragEnabled, ragThreshold, ragTopK, ragRerank, ragSourceFilter, diffReview } = await req.json();
 
   const strategySettings = {
     type: (strategy as StrategyType) ?? 'sliding-window',
@@ -22,7 +22,6 @@ export async function POST(req: Request) {
       ragTopK: ragTopK as number | undefined,
       ragRerank: ragRerank as boolean | undefined,
       ragSourceFilter: ragSourceFilter as string[] | undefined,
-      devAssistant: devAssistant as boolean | undefined,
       diffReview: diffReview as boolean | undefined,
     });
     return createUIMessageStreamResponse({

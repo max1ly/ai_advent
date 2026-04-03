@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 const inter = Inter({ subsets: ["latin"], display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Chat MAX",
+  title: "MaxSeek Chat",
   description: "Chat with AI powered by DeepSeek",
 };
 

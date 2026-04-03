@@ -2,14 +2,16 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import ChatMessage from './ChatMessage';
+import type { PendingWriteData } from './ChatMessage';
 import type { DisplayMessage } from '@/lib/types';
 
 interface ChatContainerProps {
   messages: DisplayMessage[];
   status: string;
+  pendingWrites?: Array<PendingWriteData & { messageId: string }>;
 }
 
-export default function ChatContainer({ messages, status }: ChatContainerProps) {
+export default function ChatContainer({ messages, status, pendingWrites }: ChatContainerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
 
@@ -57,6 +59,7 @@ export default function ChatContainer({ messages, status }: ChatContainerProps) 
             <ChatMessage
               key={message.id}
               message={message}
+              pendingWrites={pendingWrites?.filter(pw => pw.messageId === message.id)}
             />
           ))}
           {(status === 'submitted' || (status === 'streaming' && !messages.at(-1)?.content)) && (

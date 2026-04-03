@@ -5,9 +5,18 @@ import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
 import type { DisplayMessage, FileAttachment } from '@/lib/types';
 import RagSources from './RagSources';
+import WriteConfirmDialog from './WriteConfirmDialog';
+
+export interface PendingWriteData {
+  writeId: string;
+  path: string;
+  diff: string;
+  isNewFile: boolean;
+}
 
 interface ChatMessageProps {
   message: DisplayMessage;
+  pendingWrites?: PendingWriteData[];
 }
 
 function formatFileSize(bytes: number): string {
@@ -63,7 +72,7 @@ function FileAttachments({ files }: { files: FileAttachment[] }) {
   );
 }
 
-export default function ChatMessage({ message }: ChatMessageProps) {
+export default function ChatMessage({ message, pendingWrites }: ChatMessageProps) {
   const role = message.role;
   const content = message.content;
 
@@ -116,6 +125,15 @@ export default function ChatMessage({ message }: ChatMessageProps) {
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
           {content}
         </ReactMarkdown>
+        {pendingWrites && pendingWrites.length > 0 && pendingWrites.map((pw) => (
+          <WriteConfirmDialog
+            key={pw.writeId}
+            writeId={pw.writeId}
+            path={pw.path}
+            diff={pw.diff}
+            isNewFile={pw.isNewFile}
+          />
+        ))}
         {message.ragSources && message.ragSources.length > 0 && (
           <RagSources sources={message.ragSources} />
         )}

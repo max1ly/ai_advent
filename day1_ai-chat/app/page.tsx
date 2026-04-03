@@ -15,6 +15,7 @@ import ToolConfirmDialog from './components/ToolConfirmDialog';
 import SupportBubble from './components/SupportBubble';
 import type { Metrics, StrategyType, Branch, Invariant, McpToolCallRequest } from '@/lib/types';
 import type { DisplayMessage, FileAttachment, RagSource } from '@/lib/types';
+import type { PendingWriteData } from './components/ChatMessage';
 import { DEFAULT_MODEL } from '@/lib/models';
 
 function fileToBase64(file: File): Promise<string> {
@@ -56,8 +57,10 @@ export default function Home() {
   const [ragSourceFilter, setRagSourceFilter] = useState<string[]>([]);
   const [invariants, setInvariants] = useState<Invariant[]>([]);
   const [pendingToolCall, setPendingToolCall] = useState<McpToolCallRequest | null>(null);
+  const [pendingWrites, setPendingWrites] = useState<Array<PendingWriteData & { messageId: string }>>([]);
   const toolChainDepthRef = useRef(0);
   const toolChainResultsRef = useRef<Array<{ tool: string; result: string }>>([]);
+  const currentAssistantMsgIdRef = useRef<string>('');
 
   const handleMemoryOpen = useCallback(() => setIsMemoryOpen(true), []);
 
@@ -305,6 +308,13 @@ export default function Home() {
           });
         } else if (event.type === 'data-metrics') {
           setMetrics(event.data as Metrics);
+        } else if (event.type === 'data-pending-write') {
+          const msgId = currentAssistantMsgIdRef.current;
+          console.log('[SSE] Received data-pending-write:', event.data, 'for message:', msgId);
+          setPendingWrites(prev => [...prev, {
+            ...(event.data as PendingWriteData),
+            messageId: msgId,
+          }]);
         } else if (event.type === 'data-rag-sources') {
           setMessages((prev) => {
             const updated = [...prev];
@@ -355,7 +365,7 @@ export default function Home() {
   }, [invariants]);
 
   // Send a message to the LLM and stream the response
-  const sendAndStream = useCallback(async (text: string, opts?: { filesPayload?: Array<{ filename: string; mediaType: string; data: string }>; forceToolUse?: boolean; devAssistant?: boolean; diffReview?: boolean }) => {
+  const sendAndStream = useCallback(async (text: string, opts?: { filesPayload?: Array<{ filename: string; mediaType: string; data: string }>; forceToolUse?: boolean; diffReview?: boolean }) => {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -373,7 +383,6 @@ export default function Home() {
         ragTopK,
         ragRerank,
         ragSourceFilter: ragSourceFilter.length > 0 ? ragSourceFilter : undefined,
-        devAssistant: opts?.devAssistant,
         diffReview: opts?.diffReview,
       }),
     });
@@ -393,38 +402,6 @@ export default function Home() {
       toolChainDepthRef.current = 0;
       toolChainResultsRef.current = [];
 
-      // /help command — developer assistant mode
-      if (text.startsWith('/help')) {
-        const question = text.slice(5).trim() || 'What is this project?';
-        setInput('');
-        setError(null);
-        const helpUserMsg: DisplayMessage = {
-          id: String(++msgCounterRef.current),
-          role: 'user',
-          content: text,
-        };
-        const helpAssistantMsg: DisplayMessage = {
-          id: String(++msgCounterRef.current),
-          role: 'assistant',
-          content: '',
-        };
-        setMessages((prev) => [...prev, helpUserMsg, helpAssistantMsg]);
-        setStatus('submitted');
-        try {
-          await sendAndStream(question, { devAssistant: true });
-        } catch (err) {
-          setError(err instanceof Error ? err : new Error(String(err)));
-          setMessages((prev) => {
-            const last = prev[prev.length - 1];
-            if (last?.role === 'assistant' && !last.content) return prev.slice(0, -1);
-            return prev;
-          });
-        } finally {
-          setStatus('ready');
-        }
-        return;
-      }
-
       // /diff command — code review mode
       if (text.startsWith('/diff')) {
         setInput('');
@@ -439,6 +416,7 @@ export default function Home() {
           role: 'assistant',
           content: '',
         };
+        currentAssistantMsgIdRef.current = diffAssistantMsg.id;
         setMessages((prev) => [...prev, diffUserMsg, diffAssistantMsg]);
         setStatus('submitted');
         try {
@@ -486,6 +464,7 @@ export default function Home() {
         role: 'assistant',
         content: '',
       };
+      currentAssistantMsgIdRef.current = assistantMsg.id;
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
       setStatus('submitted');
 
@@ -610,6 +589,7 @@ export default function Home() {
         role: 'assistant',
         content: '',
       };
+      currentAssistantMsgIdRef.current = assistantMsg.id;
       setMessages((prev) => [...prev, assistantMsg]);
       setStatus('submitted');
 
@@ -649,7 +629,7 @@ export default function Home() {
       <header className="shadow-sm bg-white px-4 py-3 space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-medium tracking-tight text-gray-800">Chat MAX</h1>
+            <h1 className="text-xl font-medium tracking-tight text-gray-800">MaxSeek Chat</h1>
             <button
               onClick={() => setIsMcpOpen(true)}
               className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
@@ -693,7 +673,7 @@ export default function Home() {
       </header>
 
       {/* Messages area */}
-      <ChatContainer messages={messages} status={status} />
+      <ChatContainer messages={messages} status={status} pendingWrites={pendingWrites} />
 
       {/* Tool confirmation */}
       {pendingToolCall && (

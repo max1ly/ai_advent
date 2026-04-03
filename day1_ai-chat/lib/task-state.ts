@@ -354,19 +354,8 @@ export function parseTransitionSignals(text: string): ParsedSignal[] {
 export function detectTaskIntent(message: string): boolean {
   const lower = message.toLowerCase().trim();
 
-  // Reject greetings and questions
-  if (/^(hi|hello|hey|what|why|how|when|where|who|can you|could you|would you)\b/i.test(lower)) {
-    return false;
-  }
-
-  // Match imperative verbs at start
-  const imperativePattern = /^(build|create|implement|fix|write|add|make|set up|design|refactor|update|develop|configure)\b/i;
-  if (imperativePattern.test(lower)) {
-    return true;
-  }
-
-  // Match multi-step indicators
-  if (/\b(first.*then|step \d+|^\d+\.)/i.test(lower)) {
+  // Only trigger planning when the user explicitly asks to plan
+  if (/^(plan|create a plan|make a plan|plan how to|plan out)\b/i.test(lower)) {
     return true;
   }
 
