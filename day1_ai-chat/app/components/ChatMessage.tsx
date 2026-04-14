@@ -6,6 +6,7 @@ import type { Components } from 'react-markdown';
 import type { DisplayMessage, FileAttachment } from '@/lib/types';
 import RagSources from './RagSources';
 import WriteConfirmDialog from './WriteConfirmDialog';
+import { CopyButton } from './CopyButton';
 
 export interface PendingWriteData {
   writeId: string;
@@ -137,6 +138,9 @@ export default function ChatMessage({ message, pendingWrites }: ChatMessageProps
         {message.ragSources && message.ragSources.length > 0 && (
           <RagSources sources={message.ragSources} />
         )}
+        <div className="mt-2 flex justify-end">
+          <CopyButton text={content} />
+        </div>
       </div>
     </div>
   );

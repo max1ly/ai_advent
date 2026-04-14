@@ -43,6 +43,7 @@ See `@.claude/rules/architecture.md` for boundary details.
 
 ## Patterns (MUST follow)
 
+- **Before writing new code, READ** `.claude/rules/component-rules-v1.md` for strict rules on every new component (one-component-per-file, exported `<Name>Props` interface, named export, required test file).
 - **Client components:** `'use client'` on line 1. Only when needed (hooks, events). Push boundary to leaves.
 - **Named exports only.** NEVER `export default` for components or lib modules.
 - **Typed props:** export a TS interface `ComponentNameProps`.
