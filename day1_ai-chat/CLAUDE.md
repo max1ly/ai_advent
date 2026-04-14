@@ -1,101 +1,103 @@
-# Day1 AI Chat
+# CLAUDE.md — day1_ai-chat
 
-AI-powered chat application built with Next.js 15, Vercel AI SDK v6, and DeepSeek.
+AI chat app with multi-provider support, RAG, and MCP tool integration.
 
-## Development
+## Stack (pinned — do NOT upgrade)
 
-- **Package manager:** pnpm
-- **Dev server:** `pnpm dev` (runs on port 3030)
-- **Build:** `pnpm build`
-- **Lint:** `pnpm lint`
-- **Environment:** Create `.env.local` with `DEEPSEEK_API_KEY=<your-key>` (required). Optional: `DEEPSEEK_MODEL` (defaults to `deepseek-chat`).
+| Component | Version | Notes |
+|---|---|---|
+| Node | ≥20 | better-sqlite3 constraint |
+| pnpm | lockfileVersion 9.0 | package manager |
+| TypeScript | 5.9.3 | strict mode, `@/` path alias |
+| Next.js | 15.5.12 | App Router, `output: 'standalone'` |
+| React | 18.3.1 | NOT 19 |
+| Tailwind | 3.4.19 | **v3 syntax** — NOT v4 |
+| ai (Vercel AI SDK) | 6.0.97 | `streamText`, `tool`, `jsonSchema` |
+| @ai-sdk/deepseek | 2.0.20 | primary provider |
+| @modelcontextprotocol/sdk | 1.27.1 | stdio + SSE |
+| @lancedb/lancedb | 0.27.0 | vector store |
+| better-sqlite3 | 12.6.2 | native; `serverExternalPackages` |
+| vitest | 4.0.18 | globals: true, jsdom env |
 
-See `.claude/rules/debugging.md` for debugging workflow, service management, and validation steps.
+Dev port: **3030**.
 
 ## Architecture
 
-Next.js 15 App Router with a single-page streaming chat interface.
+- `app/` — Next.js App Router pages, layouts, route handlers. May import from `lib/`.
+- `app/components/` — React components (PascalCase `.tsx`).
+- `app/api/<segment>/route.ts` — HTTP/streaming route handlers. Thin; delegate to `lib/`.
+- `lib/` — business logic, agent orchestration, providers. Internal only; MUST NOT import from `app/`.
+- `mcp-servers/` — standalone Node processes. NO imports from `app/` or `lib/`. Communicate via stdio/SSE.
+- `__tests__/` — colocated with source (`lib/__tests__/`, `app/components/__tests__/`).
 
-### Structure
-- `app/page.tsx` — Main chat page (Client Component, owns `useChat` hook state)
-- `app/api/chat/route.ts` — POST endpoint, streams responses via SSE
-- `app/components/` — Client Components: ChatContainer, ChatInput, ChatMessage, ErrorMessage
-- `app/layout.tsx` — Root layout (Server Component)
-- `lib/deepseek.ts` — DeepSeek provider configuration
+See `@.claude/rules/architecture.md` for boundary details.
 
-### Data Flow
-1. `page.tsx` calls `useChat()` from `@ai-sdk/react` to manage conversation
-2. User input → POST to `/api/chat` with message history
-3. Route handler uses `streamText()` with DeepSeek provider
-4. Response streams back as SSE via `toUIMessageStreamResponse()`
+## Naming conventions
 
-### Component Conventions
-- All UI components are Client Components (`'use client'`)
-- PascalCase filenames in `app/components/`
-- No barrel exports (no index.ts files)
-- Props passed down from page.tsx; no global state management
+- Components: **PascalCase.tsx** in `app/components/` (e.g., `ChatMessage.tsx`)
+- Lib modules: **camelCase.ts** in `lib/` (e.g., `modelRegistry.ts`)
+- Route segments: **lowercase**, dynamic params `[param]`
+- Directories: **kebab-case** (e.g., `mcp-servers/`, `chat-history/`)
+- Tests: `<name>.test.ts(x)` in `__tests__/` subfolder
+- NEVER barrel `index.ts` — import from specific file paths via `@/` alias
 
-## AI SDK v6 Patterns
+## Patterns (MUST follow)
 
-This project uses Vercel AI SDK v6 which has breaking changes from v3/v4. Key patterns:
+- **Client components:** `'use client'` on line 1. Only when needed (hooks, events). Push boundary to leaves.
+- **Named exports only.** NEVER `export default` for components or lib modules.
+- **Typed props:** export a TS interface `ComponentNameProps`.
+- **Env vars:** read in `lib/` only. NEVER `process.env.X` inside `app/components/*`.
+- **Tools:** define via AI SDK `tool()` with Zod `inputSchema`. NEVER `any` in schemas.
+- **Errors:** `err instanceof Error ? err.message : String(err)` at every catch site.
+- **Streaming errors:** use `createUIMessageStream` writer `{ type: 'error', errorText }`.
+- **REST errors:** `return NextResponse.json({ error }, { status: 500 })`.
+- **Fire-and-forget:** always `.catch(err => console.log(...))` on unawaited promises.
 
-### Server (route.ts)
-- Use `convertToModelMessages(messages)` to convert UI messages to model format
-- Use `streamText()` from `ai` package with the converted messages
-- Return `result.toUIMessageStreamResponse()` (not `toDataStreamResponse`)
-- Do NOT pass `maxTokens` — removed in v6
+See `@.claude/rules/patterns.md` for code examples.
 
-### Client (page.tsx)
-- Use `useChat()` from `@ai-sdk/react`
-- Call `sendMessage({ text: input })` — not `handleSubmit` with form events
-- Messages are `UIMessage` type with `.parts` array (not `.content` string)
-- Access text via `message.parts.filter(p => p.type === 'text')`
+## Anti-patterns (NEVER do)
 
-### Common Gotchas
-- Old tutorials show `messages.content` — use `messages.parts` instead
-- Old tutorials show `maxTokens` option — this no longer exists in v6
-- Old tutorials show `toDataStreamResponse()` — use `toUIMessageStreamResponse()`
+- Default exports on components or lib modules
+- Barrel `index.ts` files
+- Inline `process.env.X` inside components
+- Raw `fetch(apiUrl)` instead of AI SDK provider
+- `any` on tool `execute` args or missing `inputSchema`
+- Top-level `await` in root/shared layouts
+- `'use client'` on page-root components that don't need it
+- Swallowing errors (`catch {}`) or generic `{ error: 'Failed' }`
+- Tailwind v4 syntax (project is v3)
+- Creating duplicate reset/clear logic when `app/page.tsx:171-187 handleNewChat()` already exists
 
-## Conventions
+See `@.claude/rules/anti-patterns.md` for bad→good pairs.
 
-### Commit Messages
-Conventional commits format: `type: description`
-- Types: `feat`, `fix`, `docs`, `chore`, `refactor`, `test`
-- Lowercase, imperative mood, no trailing period
-- Example: `feat: add message retry on stream failure`
+## File templates
 
-### Code Style
-- Follow existing patterns in the codebase
-- TypeScript strict mode enabled
-- Path alias: `@/*` maps to project root
-- Tailwind CSS for all styling (no CSS modules, no styled-components)
+See `@.claude/rules/templates.md` for:
+- Client component (PascalCase.tsx with `'use client'`, typed props, named export)
+- API route handler (try/catch, streaming or JSON response)
+- Lib module (camelCase.ts, named exports, no barrel)
+- Tool factory (AI SDK `tool()` with Zod schema)
 
-## Key Decisions
+## Subagents available
 
-These were made deliberately — do not change without discussion:
-- **Tailwind v3** (not v4) — v4 has PostCSS compatibility issues with this setup
-- **Next.js 15** (not 16) — 16 has Turbopack build bugs
-- **Port 3030** — avoids conflicts with other local services
+- **nextjs-route-builder** — for `app/api/**/route.ts` tasks. Auto-invoked when creating/editing route handlers.
+- **component-builder** — for React + Tailwind client components in `app/components/`.
 
-## Auto-Routing Rules
+## Skills available
 
-Apply these `.claude/rules/` automatically based on task context — no `@` reference needed:
+- **verify-build** — runs `pnpm exec tsc --noEmit --skipLibCheck`, `pnpm vitest run`, `pnpm build`. Reports compact PASS/FAIL with `file:line` pointers.
 
-| Rule | Activate When |
-|---|---|
-| `debugging.md` | Bug reports, test failures, unexpected behavior, "why isn't this working" |
-| `backend-engineer.md` | Implementing API routes, server logic, database changes |
-| `frontend-engineer.md` | Implementing UI components, client-side features, styling |
-| `testing.md` | Writing or modifying tests (auto-loaded for `server/tests/` and `client/e2e/` paths) |
-| `qa.md` | Validating a completed feature, running smoke tests, exploratory testing |
+## Known issues (do not try to fix)
 
-When multiple rules apply (e.g., a bug in a frontend component), layer them: use `debugging.md` for the investigation workflow + `frontend-engineer.md` for implementation standards.
+- `pnpm lint` is currently broken (ESLint 9 + eslint-config-next 16 circular ref). Use `pnpm exec tsc --noEmit --skipLibCheck` instead.
+- Vitest globals not in `tsconfig.json` `types` → ignore TS errors in `__tests__/*` when running `tsc`.
 
-## References
+## Good code examples
 
-- `.planning/` — Project scope, requirements (REQUIREMENTS.md), roadmap (ROADMAP.md), current state (STATE.md)
-- `.claude/rules/debugging.md` — Debugging workflow, service management, validation steps
-- `.claude/rules/testing.md` — Testing mandate, Vitest/Playwright patterns, anti-patterns
-- `.claude/rules/backend-engineer.md` — Backend engineer subagent role, mandatory checkpoints, implementation standards
-- `.claude/rules/frontend-engineer.md` — Frontend engineer subagent role, UI/UX standards, accessibility requirements
-- `.claude/rules/qa.md` — QA validation subagent role, evidence-based testing, smoke test procedures
+- Streaming route: `app/api/chat/route.ts:5-47`
+- Streaming error: `app/api/chat/route.ts:31-46`
+- Client component: `app/components/ChatMessage.tsx:1-143`
+- Tool factory: `lib/rag/tool.ts:13-35`
+- Agent orchestration: `lib/agent.ts:164-407`
+- Multi-provider abstraction: `lib/models.ts:1-73,702`
+- Singleton + HMR: `lib/dev-assistant.ts:33-37`
