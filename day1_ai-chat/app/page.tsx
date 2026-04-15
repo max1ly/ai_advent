@@ -6,7 +6,7 @@ import ChatInput from './components/ChatInput';
 import type { PendingFile } from './components/ChatInput';
 import ErrorMessage from './components/ErrorMessage';
 import ModelSelector from './components/ModelSelector';
-import MetricsDisplay from './components/MetricsDisplay';
+import { MetricsDisplay } from './components/MetricsDisplay';
 import MemoryDialog from './components/MemoryDialog';
 import InvariantsDialog from './components/InvariantsDialog';
 import IndexDialog from './components/IndexDialog';

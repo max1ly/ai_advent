@@ -2,7 +2,7 @@
 
 import type { Metrics, StrategyType, Branch, TaskStatus } from '@/lib/types';
 
-interface MetricsDisplayProps {
+export interface MetricsDisplayProps {
   metrics: Metrics | null;
   strategy: StrategyType;
   windowSize: number;
@@ -27,7 +27,7 @@ interface MetricsDisplayProps {
   onRagRerankToggle: (enabled: boolean) => void;
 }
 
-export default function MetricsDisplay({
+export function MetricsDisplay({
   metrics,
   strategy,
   windowSize,
@@ -75,7 +75,10 @@ export default function MetricsDisplay({
               min={2}
               max={30}
               value={windowSize}
-              onChange={(e) => onWindowSizeChange(Math.max(2, parseInt(e.target.value) || 10))}
+              onChange={(e) => {
+                const parsed = parseInt(e.target.value);
+                onWindowSizeChange(Math.max(2, isNaN(parsed) ? 10 : parsed));
+              }}
               className="w-12 px-1 py-0.5 text-center border border-gray-300 rounded text-sm"
             />
           </label>
@@ -244,7 +247,10 @@ export default function MetricsDisplay({
                     min={1}
                     max={50}
                     value={ragTopK}
-                    onChange={(e) => onRagTopKChange(Math.max(1, parseInt(e.target.value) || 10))}
+                    onChange={(e) => {
+                      const parsed = parseInt(e.target.value);
+                      onRagTopKChange(Math.max(1, isNaN(parsed) ? 10 : parsed));
+                    }}
                     className="w-12 px-1 py-0.5 text-center border border-gray-300 rounded text-sm"
                   />
                 </label>
