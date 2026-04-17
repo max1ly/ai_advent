@@ -63,4 +63,11 @@ data/
 #ai
 .planning/
 .vscode/
-docs/
+docs/superpowers/
+docs/hyperpowers/
+docs/plans/
+
+# playwright
+/playwright-report
+/test-results
+/playwright/.cache

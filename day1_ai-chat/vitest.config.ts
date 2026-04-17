@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { defineConfig, configDefaults } from 'vitest/config';
 import path from 'path';
 
 export default defineConfig({
@@ -9,6 +9,21 @@ export default defineConfig({
     globals: true,
     fileParallelism: false,
     environment: 'jsdom',
+    exclude: [...configDefaults.exclude, 'e2e/**'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json-summary', 'lcov'],
+      include: ['lib/**/*.ts', 'app/components/**/*.tsx'],
+      exclude: [
+        '**/__tests__/**',
+        '**/*.d.ts',
+        '**/*.test.ts',
+        '**/*.test.tsx',
+        'mcp-servers/**',
+      ],
+      reportsDirectory: './coverage',
+      reportOnFailure: true,
+    },
   },
   resolve: {
     alias: {

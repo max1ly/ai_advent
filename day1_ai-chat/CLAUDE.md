@@ -87,6 +87,9 @@ See `@.claude/rules/templates.md` for:
 ## Skills available
 
 - **verify-build** — runs `pnpm exec tsc --noEmit --skipLibCheck`, `pnpm vitest run`, `pnpm build`. Reports compact PASS/FAIL with `file:line` pointers.
+- **test-code** — Level 1: find vitest coverage gaps, author tests for the top 3–5 uncovered files, run them, verify three green runs, write a report. Trigger: "add tests", "find coverage gaps", "write tests", "cover X with tests".
+- **test-smoke** — Level 2: execute 3–5 natural-language UI scenarios against the running app using Playwright. Manages app lifecycle on :3030, generates specs, captures screenshots on failure, writes diagnosis report. Trigger: "run smoke test", "test the UI", "test scenarios: ...".
+- **test-new-feature** — Orchestrator: chains test-code + test-smoke under a shared timestamp, writes unified report with cross-level diagnosis, promotes passing specs. Trigger: "new feature just created", "cover this feature".
 
 ## Known issues (do not try to fix)
 
