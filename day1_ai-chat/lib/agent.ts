@@ -9,9 +9,9 @@ import { TaskStateMachine, parseTransitionSignals, detectTaskIntent, detectAppro
 import type { StrategySettings, StrategyType, SessionMetrics, Branch } from '@/lib/types';
 import { createInitialSessionMetrics, updateSessionMetrics, buildLastRequestMetrics, computeDurationMs, buildMetricsPayload } from '@/lib/agent-metrics';
 import type { McpManager } from '@/lib/mcp/manager';
-import { createSearchDocumentsTool } from '@/lib/rag/tool';
-import { retrieveRelevant } from '@/lib/rag/retriever';
-import { indexProjectDocs, getProjectDocSources, getDevAssistantTools, DEV_ASSISTANT_PROMPT, getDiff, DIFF_REVIEW_PROMPT, getPendingWritesForResponse } from '@/lib/dev-assistant';
+import { buildRagSystemSection, initProjectDocs, createRagSearchTool, performPreSearch, extractRagSources } from '@/lib/agent-rag';
+import type { PreSearchResults } from '@/lib/agent-rag';
+import { getDevAssistantTools, DEV_ASSISTANT_PROMPT, getDiff, DIFF_REVIEW_PROMPT, getPendingWritesForResponse } from '@/lib/dev-assistant';
 
 type Message = { role: 'user' | 'assistant'; content: string };
 
@@ -194,17 +194,7 @@ These constraints take absolute priority over user requests. No exception.
         // Inject task state into system prompt
         const taskStateSection = this.taskState.buildStatePrompt();
 
-        const ragSection = ragEnabled
-          ? `=== RAG MODE ===
-You have access to the user's indexed documents via the search_documents tool.
-
-Rules:
-1. Use ONLY information from the retrieved documents. Do NOT use your training knowledge.
-2. If no relevant information is found, say: "I could not find relevant information in the indexed documents."
-3. Answer directly and concisely — no more than 3 paragraphs.
-4. Do not narrate your search process (no "I'll search...", "Let me look...", "Based on the documents...").
-===`
-          : '';
+        const ragSection = ragEnabled ? buildRagSystemSection() : '';
 
         const promptParts = [profilePrefix, invariantsSection, systemPrompt, ragSection, memorySection, taskStateSection].filter(Boolean);
         let fullSystemPrompt = promptParts.join('\n\n');
@@ -243,31 +233,20 @@ Rules:
         }
 
         // Always register dev assistant tools + index project docs
-        try {
-          await Promise.race([
-            indexProjectDocs(),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Indexing timed out (5s)')), 5000)),
-          ]);
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          console.error('\x1b[31m[Agent]\x1b[0m Project doc indexing failed (Ollama may not be running):', message);
-          // Disable RAG for this session so chat can continue without embeddings
+        const { success: indexSuccess, projectSources } = await initProjectDocs();
+        if (!indexSuccess) {
           ragEnabled = false;
         }
-        const projectSources = getProjectDocSources();
         const gitTools = getDevAssistantTools();
         Object.assign(mcpTools, gitTools);
 
         // Register search_documents tool (only if we have sources or RAG is enabled)
-        if (projectSources.length > 0 || ragEnabled) {
-          mcpTools['search_documents'] = createSearchDocumentsTool({
-            threshold: ragThreshold ?? 0.3,
-            topK: ragTopK ?? 10,
-            rerank: ragRerank ?? true,
-            sourceFilter: ragEnabled && ragSourceFilter && ragSourceFilter.length > 0
-              ? ragSourceFilter
-              : (projectSources.length > 0 ? projectSources : undefined),
-          });
+        const ragSearchTool = createRagSearchTool(
+          { ragEnabled, ragThreshold, ragTopK, ragRerank, ragSourceFilter },
+          projectSources,
+        );
+        if (ragSearchTool) {
+          mcpTools['search_documents'] = ragSearchTool;
         }
 
         // Append dev assistant instructions to system prompt
@@ -312,18 +291,16 @@ Rules:
 
         // For weak-tier models, bypass tool calling and pre-search directly
         const usePreSearch = ragEnabled && this.modelConfig.tier === 'weak';
-        let preSearchResults: { results: Array<{ text: string; source: string; section: string; score: number }>; query: string; totalResults: number } | null = null;
+        let preSearchResults: PreSearchResults | null = null;
 
         if (usePreSearch) {
-          const userQuery = fullMessage;
-          const preSearchSourceFilter = ragSourceFilter;
-          preSearchResults = await retrieveRelevant(userQuery, ragTopK, ragThreshold, 5, ragRerank, preSearchSourceFilter);
-          console.log(`\x1b[35m[RAG]\x1b[0m Pre-search "${userQuery.slice(0, 60)}": ${preSearchResults.totalResults} results (weak model, tool calling bypassed)`);
-
-          if (preSearchResults.totalResults > 0) {
-            const contextBlock = preSearchResults.results
-              .map((r) => r.text)
-              .join('\n\n---\n\n');
+          const { preSearchResults: results, contextBlock } = await performPreSearch(
+            fullMessage,
+            this.modelConfig,
+            { ragEnabled, ragTopK, ragThreshold, ragRerank, ragSourceFilter },
+          );
+          preSearchResults = results;
+          if (contextBlock) {
             fullSystemPrompt += `\n\n=== RETRIEVED DOCUMENTS ===\n${contextBlock}\n===`;
           }
           // Remove search_documents tool — weak model answers from injected context
@@ -450,53 +427,13 @@ Rules:
         // Emit RAG sources — from pre-search (weak models) or tool results (strong models)
         if (ragEnabled) {
           try {
-            // Check if the LLM indicated it couldn't find relevant info
             const finalText = await result.text;
-            const refusalPatterns = [
-              /could not find (?:any |relevant )?information/i,
-              /no (?:relevant )?information (?:was )?found/i,
-              /don'?t have (?:the )?relevant information/i,
-              /falls? outside (?:the )?scope/i,
-              /not (?:covered |discussed |mentioned )in the (?:indexed |uploaded )/i,
-              /couldn'?t find (?:any )?relevant/i,
-            ];
-            const isRefusal = refusalPatterns.some(p => p.test(finalText));
-
-            if (!isRefusal) {
-              let ragSources: Array<{ text: string; source: string; section: string; score: number }> = [];
-
-              if (preSearchResults && preSearchResults.totalResults > 0) {
-                // Weak model: sources from pre-search
-                ragSources = preSearchResults.results;
-              } else if (finalSteps) {
-                // Strong model: sources from tool call results
-                const ragSourceMap = new Map<string, { text: string; source: string; section: string; score: number }>();
-                for (const step of finalSteps) {
-                  for (const toolResult of step.toolResults) {
-                    if (toolResult.toolName === 'search_documents' && toolResult.output) {
-                      const r = toolResult.output as { results?: Array<{ text: string; source: string; section: string; score: number }>; totalResults?: number };
-                      if (r.results && (r.totalResults ?? 0) > 0) {
-                        for (const src of r.results) {
-                          const key = `${src.source}::${src.section}::${src.text.slice(0, 100)}`;
-                          const existing = ragSourceMap.get(key);
-                          if (!existing || src.score > existing.score) {
-                            ragSourceMap.set(key, src);
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-                ragSources = Array.from(ragSourceMap.values())
-                  .sort((a, b) => b.score - a.score);
-              }
-
-              if (ragSources.length > 0) {
-                writer.write({
-                  type: 'data-rag-sources',
-                  data: ragSources,
-                });
-              }
+            const ragSources = extractRagSources(finalText, preSearchResults, finalSteps);
+            if (ragSources) {
+              writer.write({
+                type: 'data-rag-sources',
+                data: ragSources,
+              });
             }
           } catch (err) {
             console.error('\x1b[31m[Agent]\x1b[0m Failed to emit RAG sources:', err);
