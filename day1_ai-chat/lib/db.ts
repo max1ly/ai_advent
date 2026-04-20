@@ -181,6 +181,22 @@ export function getSessionMessagesWithFiles(
   }));
 }
 
+// --- Sessions ---
+
+export interface SessionSummary {
+  session_id: string;
+  started: string;
+  last_active: string;
+  message_count: number;
+}
+
+export function getSessions(): SessionSummary[] {
+  return db.prepare(
+    `SELECT session_id, MIN(created_at) as started, MAX(created_at) as last_active, COUNT(*) as message_count
+     FROM messages GROUP BY session_id ORDER BY last_active DESC`,
+  ).all() as SessionSummary[];
+}
+
 // --- Working Memory ---
 
 export function getWorkingMemory(

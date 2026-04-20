@@ -13,6 +13,7 @@ import IndexDialog from './components/IndexDialog';
 import McpSettingsDialog from './components/McpSettingsDialog';
 import ToolConfirmDialog from './components/ToolConfirmDialog';
 import SupportBubble from './components/SupportBubble';
+import { SessionHistory } from './components/SessionHistory';
 import type { Metrics, StrategyType, Branch, Invariant, McpToolCallRequest } from '@/lib/types';
 import type { DisplayMessage, FileAttachment, RagSource } from '@/lib/types';
 import type { PendingWriteData } from './components/ChatMessage';
@@ -60,6 +61,7 @@ export default function Home() {
   const [invariants, setInvariants] = useState<Invariant[]>([]);
   const [pendingToolCall, setPendingToolCall] = useState<McpToolCallRequest | null>(null);
   const [pendingWrites, setPendingWrites] = useState<Array<PendingWriteData & { messageId: string }>>([]);
+  const [isSessionHistoryOpen, setIsSessionHistoryOpen] = useState(false);
   const toolChainDepthRef = useRef(0);
   const toolChainResultsRef = useRef<Array<{ tool: string; result: string }>>([]);
   const currentAssistantMsgIdRef = useRef<string>('');
@@ -216,6 +218,38 @@ export default function Home() {
     setInvariants([]);
     setBranches([]);
     setActiveBranchId(null);
+  }, []);
+
+  const handleSelectSession = useCallback(async (sessionId: string) => {
+    try {
+      const res = await fetch(`/api/chat/sessions/${encodeURIComponent(sessionId)}`);
+      if (!res.ok) throw new Error('Failed to load session');
+      const data = await res.json();
+      if (data.messages?.length > 0) {
+        const displayMessages: DisplayMessage[] = data.messages.map(
+          (m: { role: string; content: string }) => ({
+            id: String(++msgCounterRef.current),
+            role: m.role as 'user' | 'assistant',
+            content: m.content,
+          }),
+        );
+        setMessages(displayMessages);
+        sessionIdRef.current = sessionId;
+        localStorage.setItem('chat-session-id', sessionId);
+        setMetrics(null);
+        setError(null);
+        setInvariants([]);
+        setBranches([]);
+        setActiveBranchId(null);
+        requestAnimationFrame(() => {
+          const container = document.querySelector('[data-chat-container]');
+          if (container) container.scrollTop = container.scrollHeight;
+        });
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn('[SessionHistory] Failed to load session:', message);
+    }
   }, []);
 
   const handleCheckpoint = useCallback(async () => {
@@ -687,6 +721,16 @@ export default function Home() {
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-medium tracking-tight text-gray-800">MaxSeek Chat</h1>
             <button
+              onClick={() => setIsSessionHistoryOpen(true)}
+              className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+              title="Session History"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 8v4l3 3" />
+                <circle cx="12" cy="12" r="10" />
+              </svg>
+            </button>
+            <button
               onClick={() => setIsMcpOpen(true)}
               className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
               title="MCP Servers"
@@ -784,6 +828,13 @@ export default function Home() {
       />
 
       <SupportBubble />
+
+      <SessionHistory
+        currentSessionId={sessionIdRef.current}
+        onSelectSession={handleSelectSession}
+        isOpen={isSessionHistoryOpen}
+        onClose={() => setIsSessionHistoryOpen(false)}
+      />
     </div>
   );
 }
