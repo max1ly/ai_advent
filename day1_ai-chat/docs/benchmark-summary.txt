@@ -1,0 +1,30 @@
+COMPARISON: Cloud (Copilot) vs LOCAL LLM (best = Qwen 14B)
+1. Rules support and following: Cloud 5/5 vs Local modles 2/5
+2. Code correctness: Cloud 5/5 vs Local 3.5/5
+3. First-prompt success: Cloud 5/5 vs Local 2/5
+4. Speed: Cloud ~338s (for full cycle new feature), bugfix ~15s vs Local ~812s (new feature), bugfix ~50s
+File creation: Copilot automatic, Local manual (agent mode broken)
+Offline: Copilot no, Local yes
+Cost: Copilot ~$10-15/mo, Local $0
+Autocomplete: Copilot yes, Local yes (Qwen 7B)
+Multi-file: Copilot excellent, Local limited
+Privacy: Copilot cloud, Local fully local
+
+WHEN LOCAL MODEL IS FINE
+1. Tab autocomplete while coding (Qwen 7B, ~1-2s latency)
+2. Boilerplate generation — copy from chat, paste into file (AGENT MODE WAS NOT WORKING)
+3. Quick explanations of the currently open file
+4. Offline work
+5. Privacy-sensitive code
+
+WHEN CLOUD MODEL IS BETTER
+1. Anything requiring project rule compliance
+2. Nicely picks up all the projec rule files, skills and commands
+3. Multi-file changes spanning app/ and lib/
+4. Bug fixing with full project context
+5. Comprehensive code explanations across multiple files comparing to Local LLM
+
+RECOMMENDED SETUP
+Chat: Qwen 2.5 Coder 14B (temp 0.3, top_p 0.85)
+Autocomplete: Qwen 2.5 Coder 7B (temp 0.1, top_p 0.7)
+Agent mode: not viable with local models

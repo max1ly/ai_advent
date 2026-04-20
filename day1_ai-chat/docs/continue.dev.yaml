@@ -1,0 +1,204 @@
+name: day1-ai-chat Local Dev
+version: 1.0.0
+schema: v1
+models:
+  - name: Llama 3.1 8B
+    provider: ollama
+    model: llama3.1:8b
+    roles:
+      - chat
+      - edit
+      - apply
+  - name: Qwen2.5-Coder 1.5B
+    provider: ollama
+    model: qwen2.5-coder:1.5b-base
+    roles:
+      - autocomplete
+  - name: Nomic Embed
+    provider: ollama
+    model: nomic-embed-text:latest
+    roles:
+      - embed
+  - name: Qwen 2.5 Coder 14B
+    provider: ollama
+    model: qwen2.5-coder:14b
+    apiBase: http://localhost:11434
+    roles:
+      - chat
+      - edit
+      - apply
+    defaultCompletionOptions:
+      temperature: 0.3
+      topP: 0.85
+      topK: 40
+      maxTokens: 4096
+      frequencyPenalty: 0.1
+    requestOptions:
+      timeout: 60000
+  - name: Qwen 2.5 Coder 7B
+    provider: ollama
+    model: qwen2.5-coder:7b
+    apiBase: http://localhost:11434
+    roles:
+      - autocomplete
+    defaultCompletionOptions:
+      temperature: 0.1
+      topP: 0.7
+      topK: 15
+      maxTokens: 1024
+    autocompleteOptions:
+      debounceDelay: 250
+      maxPromptTokens: 512
+      multilineCompletions: auto
+      modelTimeout: 5000
+  - name: Nomic Embed
+    provider: ollama
+    model: nomic-embed-text
+    roles:
+      - embed
+  - name: Autodetect
+    provider: ollama
+    model: AUTODETECT
+rules:
+  - >
+    # Project Rules — day1_ai-chat
+
+    Next.js 15.5.12 / React 18.3.1 / Tailwind 3.4.19 / TypeScript 5.9.3 strict
+
+    AI SDK 6.0.97 / @ai-sdk/deepseek / LanceDB / better-sqlite3 / vitest 4.0.18
+
+
+    ## Architecture
+
+    app/ → may import lib/. lib/ → MUST NOT import app/.
+
+    mcp-servers/ → standalone, no imports from app/ or lib/.
+
+    Import via @/ alias. Never barrel index.ts.
+
+
+    ## Component Rules (R1-R5)
+
+    R1: One component per file at app/components/<PascalCase>.tsx
+
+    R2: Props via exported interface <Name>Props (not type alias)
+
+    R3: Named export only (export function / export const). No default export.
+
+    R4: New component → test at app/components/__tests__/<Name>.test.tsx
+
+    R5: 'use client' on line 1 for client components
+
+
+    ## Anti-Patterns (FORBIDDEN)
+
+    1. No default exports
+
+    2. No barrel index.ts files
+
+    3. No process.env in components — read in lib/ only
+
+    4. No `any` on tool args — use Zod inputSchema
+
+    5. No swallowed errors — use: catch (err: unknown) { const msg = err
+    instanceof Error ? err.message : String(err); }
+
+    6. No duplicate reset logic — reuse handleNewChat from app/page.tsx
+
+    7. No Tailwind v4 syntax — project uses v3
+
+
+    ## File Templates
+
+    Client component: 'use client' + exported interface + named export +
+    Tailwind classes
+
+    API route: try/catch with typed error, delegate to lib/
+
+    Streaming route: createUIMessageStream + createUIMessageStreamResponse
+
+    Lib module: named exports only, no barrel, camelCase filename
+
+    Tool factory: AI SDK tool() with Zod inputSchema
+
+
+    ## Naming
+
+    Components: PascalCase.tsx in app/components/
+
+    Lib modules: camelCase.ts in lib/
+
+    Routes: lowercase, dynamic params [param]
+
+    Tests: <name>.test.ts(x) in __tests__/ subfolder
+
+
+    ## Error Pattern
+
+    catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+    }
+
+
+    ## Known Issues
+
+    - pnpm lint broken — use tsc --noEmit --skipLibCheck
+
+    - Vitest globals not in tsconfig types — ignore TS errors in __tests__
+
+
+    ## Response Rules
+
+    - Show COMPLETE file contents. No placeholders like "// ... rest
+    unchanged".
+
+    - Write code directly. Do not ask for permission or confirmation.
+
+    - Be concise in explanations. Code speaks louder than words.
+prompts:
+  - name: review
+    description: Review code for rule violations
+    prompt: |
+      Review this code against the project rules. Check for:
+      - Default exports (forbidden)
+      - Missing exported Props interface
+      - process.env in components
+      - Swallowed errors
+      - Tailwind v4 syntax
+      Report violations with line numbers.
+  - name: component
+    description: Generate a new component following R1-R5
+    prompt: |
+      Create a new React component following these rules exactly:
+      1. File at app/components/<PascalCase>.tsx
+      2. 'use client' on line 1
+      3. Export interface <Name>Props with typed props
+      4. Export function <Name> (named, not default)
+      5. Use Tailwind 3.4 classes
+      6. Create test at app/components/__tests__/<Name>.test.tsx
+  - name: fix
+    description: Find and fix a bug with structured output
+    prompt: |
+      Find the bug in the provided code. Respond in this format:
+      ## Bug — one sentence
+      ## Root cause — file:line, quote the defect
+      ## Fix — show the complete corrected code
+      ## Regression check — what to test after fixing
+  - name: explain
+    description: Explain code flow with file:line references
+    prompt: |
+      Explain how this code works. Trace the flow step by step with file:line
+      references. Start from the entry point and follow the data through each
+      layer.
+  - name: refactor
+    description: Refactor code following project patterns
+    prompt: |
+      Refactor this code to follow project rules. Show the complete refactored
+      file. Check for: default exports, missing Props interface, swallowed
+      errors, process.env in components, barrel imports.
+  - name: test
+    description: Generate a test file for a component or module
+    prompt: |
+      Write a test file for this code. Use vitest with globals (describe/it/expect).
+      For components: use @testing-library/react, test rendering and key interactions.
+      Place at __tests__/<Name>.test.tsx. Show the complete test file.
