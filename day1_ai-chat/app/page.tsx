@@ -520,12 +520,12 @@ export default function Home() {
             const parsed = JSON.parse(r.result);
             let actualData = parsed;
             if (parsed?.content?.[0]?.text) {
-              try { actualData = JSON.parse(parsed.content[0].text); } catch { /* not JSON */ }
+              try { actualData = JSON.parse(parsed.content[0].text); } catch (err: unknown) { console.warn('[Pipeline] content[0].text is not JSON:', err instanceof Error ? err.message : String(err)); }
             }
             if (typeof actualData === 'object' && actualData !== null) {
               mergedPipelineData = { ...mergedPipelineData, ...actualData };
             }
-          } catch { /* skip */ }
+          } catch (err: unknown) { console.warn('[Pipeline] Failed to parse tool result:', err instanceof Error ? err.message : String(err)); }
         }
         // Only fill in missing fields — don't override what the LLM explicitly set
         for (const [key, value] of Object.entries(mergedPipelineData)) {
@@ -578,12 +578,12 @@ export default function Home() {
           if (parsed?.content?.[0]?.text) {
             try {
               actualData = JSON.parse(parsed.content[0].text);
-            } catch { /* text wasn't JSON, use outer object */ }
+            } catch (err: unknown) { console.warn('[Pipeline] content[0].text is not JSON, using outer object:', err instanceof Error ? err.message : String(err)); }
           }
           if (typeof actualData === 'object' && actualData !== null) {
             mergedData = { ...mergedData, ...actualData };
           }
-        } catch { /* non-JSON result, skip */ }
+        } catch (err: unknown) { console.warn('[Pipeline] Non-JSON tool result, skipping:', err instanceof Error ? err.message : String(err)); }
       }
       const mergedDataStr = Object.keys(mergedData).length > 0
         ? `\n\nMerged data from all pipeline steps:\n${JSON.stringify(mergedData, null, 2)}`
