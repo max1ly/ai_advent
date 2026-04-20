@@ -47,7 +47,15 @@ Example output:
   "knowledge": [{ "fact": "Project uses Next.js 15", "source": "conversation", "operation": "ADD" }]
 }`;
 
+/**
+ * Manages extraction and retrieval of structured memory (working memory,
+ * profile, solutions, and knowledge) across chat sessions.
+ */
 export class MemoryManager {
+  /**
+   * Retrieves the full memory state for a given session, including working
+   * memory, user profile, learned solutions, and stored knowledge facts.
+   */
   getMemoryState(sessionId: string): MemoryState {
     const wm = getWorkingMemory(sessionId);
     return {
@@ -67,6 +75,13 @@ export class MemoryManager {
     };
   }
 
+  /**
+   * Builds a formatted string containing all memory categories (long-term and
+   * working memory) suitable for injection into the system prompt.
+   *
+   * @param sessionId - The session whose memory state to format
+   * @returns A formatted memory section string, or empty string if no memory exists
+   */
   buildSystemPromptSection(sessionId: string): string {
     const state = this.getMemoryState(sessionId);
     const sections: string[] = [];
@@ -119,6 +134,16 @@ export class MemoryManager {
     return sections.length > 0 ? sections.join('\n\n') : '';
   }
 
+  /**
+   * Analyzes a user message using an LLM to extract structured memory updates
+   * (working memory, profile facts, solutions, and knowledge) and persists them.
+   *
+   * @param userMessage - The user's message to analyze for memory extraction
+   * @param _assistantResponse - The assistant's response (currently unused)
+   * @param sessionId - The session to associate extracted memory with
+   * @param modelInstance - The AI model instance to use for extraction
+   * @returns The total token count used for the extraction, or 0 on failure
+   */
   async extractMemory(
     userMessage: string,
     _assistantResponse: string,
@@ -179,6 +204,13 @@ export class MemoryManager {
     }
   }
 
+  /**
+   * Applies a parsed memory extraction result to the database, persisting
+   * updates to working memory, profile, solutions, and knowledge stores.
+   *
+   * @param sessionId - The session to apply working memory updates to
+   * @param result - The structured extraction result from the LLM
+   */
   applyExtraction(sessionId: string, result: MemoryExtractionResult): void {
     // Working memory
     if (result.working_memory) {
@@ -213,4 +245,5 @@ export class MemoryManager {
   }
 }
 
+/** Singleton MemoryManager instance for use across the application. */
 export const memoryManager = new MemoryManager();
