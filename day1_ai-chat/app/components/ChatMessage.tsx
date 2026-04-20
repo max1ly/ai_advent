@@ -7,6 +7,7 @@ import type { DisplayMessage, FileAttachment } from '@/lib/types';
 import RagSources from './RagSources';
 import WriteConfirmDialog from './WriteConfirmDialog';
 import { CopyButton } from './CopyButton';
+import { BookmarkButton } from '@/app/components/BookmarkButton';
 
 export interface PendingWriteData {
   writeId: string;
@@ -18,6 +19,10 @@ export interface PendingWriteData {
 interface ChatMessageProps {
   message: DisplayMessage;
   pendingWrites?: PendingWriteData[];
+  messageIndex?: number;
+  sessionId?: string | null;
+  isBookmarked?: boolean;
+  onBookmarkToggle?: (messageIndex: number, bookmarked: boolean) => void;
 }
 
 function formatFileSize(bytes: number): string {
@@ -73,13 +78,23 @@ function FileAttachments({ files }: { files: FileAttachment[] }) {
   );
 }
 
-export default function ChatMessage({ message, pendingWrites }: ChatMessageProps) {
+export default function ChatMessage({ message, pendingWrites, messageIndex, sessionId, isBookmarked, onBookmarkToggle }: ChatMessageProps) {
   const role = message.role;
   const content = message.content;
 
   if (role === 'user') {
     return (
-      <div className="flex justify-end">
+      <div className="flex justify-end group">
+        {messageIndex !== undefined && onBookmarkToggle && (
+          <div className="self-start mt-2 mr-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <BookmarkButton
+              sessionId={sessionId ?? null}
+              messageIndex={messageIndex}
+              isBookmarked={isBookmarked ?? false}
+              onToggle={onBookmarkToggle}
+            />
+          </div>
+        )}
         <div className="max-w-[80%] rounded-2xl rounded-br-md bg-gradient-to-br from-blue-600 to-indigo-600 px-5 py-3 text-white shadow-md">
           {message.files && <FileAttachments files={message.files} />}
           {content}
@@ -121,7 +136,7 @@ export default function ChatMessage({ message, pendingWrites }: ChatMessageProps
   };
 
   return (
-    <div className="flex justify-start">
+    <div className="flex justify-start group">
       <div className="prose max-w-none max-w-[80%] rounded-2xl rounded-bl-md bg-white shadow-sm border border-gray-100 px-5 py-3">
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
           {content}
@@ -138,10 +153,20 @@ export default function ChatMessage({ message, pendingWrites }: ChatMessageProps
         {message.ragSources && message.ragSources.length > 0 && (
           <RagSources sources={message.ragSources} />
         )}
-        <div className="mt-2 flex justify-end">
+        <div className="mt-2 flex justify-end gap-1">
           <CopyButton text={content} />
         </div>
       </div>
+      {messageIndex !== undefined && onBookmarkToggle && (
+        <div className="self-start mt-2 ml-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <BookmarkButton
+            sessionId={sessionId ?? null}
+            messageIndex={messageIndex}
+            isBookmarked={isBookmarked ?? false}
+            onToggle={onBookmarkToggle}
+          />
+        </div>
+      )}
     </div>
   );
 }

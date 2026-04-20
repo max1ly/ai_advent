@@ -9,9 +9,12 @@ interface ChatContainerProps {
   messages: DisplayMessage[];
   status: string;
   pendingWrites?: Array<PendingWriteData & { messageId: string }>;
+  sessionId?: string | null;
+  bookmarkedIndices?: Set<number>;
+  onBookmarkToggle?: (messageIndex: number, bookmarked: boolean) => void;
 }
 
-export default function ChatContainer({ messages, status, pendingWrites }: ChatContainerProps) {
+export default function ChatContainer({ messages, status, pendingWrites, sessionId, bookmarkedIndices, onBookmarkToggle }: ChatContainerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
 
@@ -55,12 +58,17 @@ export default function ChatContainer({ messages, status, pendingWrites }: ChatC
         </div>
       ) : (
         <>
-          {messages.map((message) => (
-            <ChatMessage
-              key={message.id}
-              message={message}
-              pendingWrites={pendingWrites?.filter(pw => pw.messageId === message.id)}
-            />
+          {messages.map((message, index) => (
+            <div key={message.id} data-message-index={index}>
+              <ChatMessage
+                message={message}
+                pendingWrites={pendingWrites?.filter(pw => pw.messageId === message.id)}
+                messageIndex={index}
+                sessionId={sessionId}
+                isBookmarked={bookmarkedIndices?.has(index) ?? false}
+                onBookmarkToggle={onBookmarkToggle}
+              />
+            </div>
           ))}
           {(status === 'submitted' || (status === 'streaming' && !messages.at(-1)?.content)) && (
             <div className="flex justify-start">

@@ -16,6 +16,8 @@ import SupportBubble from './components/SupportBubble';
 import { SessionHistory } from './components/SessionHistory';
 import { KeyboardShortcuts } from './components/KeyboardShortcuts';
 import { ShortcutsDialog } from './components/ShortcutsDialog';
+import { BookmarksList } from './components/BookmarksList';
+import type { BookmarkEntry } from './components/BookmarksList';
 import type { ShortcutHandlers } from '@/lib/keyboard-shortcuts';
 import type { Metrics, StrategyType, Branch, Invariant, McpToolCallRequest } from '@/lib/types';
 import type { DisplayMessage, FileAttachment, RagSource } from '@/lib/types';
@@ -66,9 +68,63 @@ export default function Home() {
   const [pendingWrites, setPendingWrites] = useState<Array<PendingWriteData & { messageId: string }>>([]);
   const [isSessionHistoryOpen, setIsSessionHistoryOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [isBookmarksOpen, setIsBookmarksOpen] = useState(false);
+  const [bookmarkedIndices, setBookmarkedIndices] = useState<Set<number>>(new Set());
   const toolChainDepthRef = useRef(0);
   const toolChainResultsRef = useRef<Array<{ tool: string; result: string }>>([]);
   const currentAssistantMsgIdRef = useRef<string>('');
+
+  const loadBookmarks = useCallback(async (sid: string) => {
+    try {
+      const res = await fetch(`/api/bookmarks?sessionId=${encodeURIComponent(sid)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const indices = new Set<number>(
+        (data.bookmarks ?? []).map((b: { message_index: number }) => b.message_index),
+      );
+      setBookmarkedIndices(indices);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.log('[Bookmarks] Failed to load:', message);
+    }
+  }, []);
+
+  const handleBookmarkToggle = useCallback((messageIndex: number, bookmarked: boolean) => {
+    setBookmarkedIndices((prev) => {
+      const next = new Set(prev);
+      if (bookmarked) {
+        next.add(messageIndex);
+      } else {
+        next.delete(messageIndex);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleScrollToMessage = useCallback((messageIndex: number) => {
+    const container = document.querySelector('[data-chat-container]');
+    if (!container) return;
+    const messageElements = container.querySelectorAll('[data-message-index]');
+    const target = Array.from(messageElements).find(
+      (el) => el.getAttribute('data-message-index') === String(messageIndex),
+    );
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, []);
+
+  const bookmarkEntries: BookmarkEntry[] = useMemo(() => {
+    return Array.from(bookmarkedIndices)
+      .sort((a, b) => a - b)
+      .map((idx) => {
+        const msg = messages[idx];
+        return {
+          messageIndex: idx,
+          label: 'bookmark',
+          contentPreview: msg ? msg.content.slice(0, 120) : '',
+        };
+      });
+  }, [bookmarkedIndices, messages]);
 
   const handleExport = useCallback(async () => {
     if (!sessionIdRef.current) return;
@@ -149,6 +205,7 @@ export default function Home() {
     }
 
     sessionIdRef.current = savedSessionId;
+    loadBookmarks(savedSessionId).catch(() => {});
     const savedInvariants = localStorage.getItem(`invariants-${savedSessionId}`);
     if (savedInvariants) {
       try {
@@ -222,6 +279,7 @@ export default function Home() {
     setInvariants([]);
     setBranches([]);
     setActiveBranchId(null);
+    setBookmarkedIndices(new Set());
   }, []);
 
   const handleSelectSession = useCallback(async (sessionId: string) => {
@@ -245,6 +303,7 @@ export default function Home() {
         setInvariants([]);
         setBranches([]);
         setActiveBranchId(null);
+        loadBookmarks(sessionId).catch(() => {});
         requestAnimationFrame(() => {
           const container = document.querySelector('[data-chat-container]');
           if (container) container.scrollTop = container.scrollHeight;
@@ -254,7 +313,7 @@ export default function Home() {
       const message = err instanceof Error ? err.message : String(err);
       console.warn('[SessionHistory] Failed to load session:', message);
     }
-  }, []);
+  }, [loadBookmarks]);
 
   const handleCheckpoint = useCallback(async () => {
     if (!sessionIdRef.current) {
@@ -765,6 +824,15 @@ export default function Home() {
               </svg>
             </button>
             <button
+              onClick={() => setIsBookmarksOpen(true)}
+              className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+              title="Bookmarks"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+              </svg>
+            </button>
+            <button
               onClick={() => setIsMcpOpen(true)}
               className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
               title="MCP Servers"
@@ -808,7 +876,14 @@ export default function Home() {
       </header>
 
       {/* Messages area */}
-      <ChatContainer messages={messages} status={status} pendingWrites={pendingWrites} />
+      <ChatContainer
+        messages={messages}
+        status={status}
+        pendingWrites={pendingWrites}
+        sessionId={sessionIdRef.current}
+        bookmarkedIndices={bookmarkedIndices}
+        onBookmarkToggle={handleBookmarkToggle}
+      />
 
       {/* Tool confirmation */}
       {pendingToolCall && (
@@ -873,6 +948,13 @@ export default function Home() {
       <ShortcutsDialog
         isOpen={isShortcutsOpen}
         onClose={() => setIsShortcutsOpen(false)}
+      />
+
+      <BookmarksList
+        isOpen={isBookmarksOpen}
+        onClose={() => setIsBookmarksOpen(false)}
+        bookmarks={bookmarkEntries}
+        onScrollToMessage={handleScrollToMessage}
       />
 
       <KeyboardShortcuts handlers={shortcutHandlers} />

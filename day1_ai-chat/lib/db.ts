@@ -103,6 +103,15 @@ function createDatabase(): Database.Database {
       enabled INTEGER NOT NULL DEFAULT 1,
       created_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS bookmarks (
+      id INTEGER PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      message_index INTEGER NOT NULL,
+      label TEXT DEFAULT 'bookmark',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_session_msg ON bookmarks(session_id, message_index);
   `);
 
   console.log('\x1b[36m[DB]\x1b[0m SQLite initialized (WAL mode)');
@@ -426,4 +435,22 @@ export function updateMcpServer(
 
 export function deleteMcpServer(id: string): void {
   db.prepare('DELETE FROM mcp_servers WHERE id = ?').run(id);
+}
+
+// --- Bookmarks ---
+
+export function saveBookmark(sessionId: string, messageIndex: number, label: string = 'bookmark'): void {
+  db.prepare(
+    'INSERT INTO bookmarks (session_id, message_index, label) VALUES (?, ?, ?) ON CONFLICT(session_id, message_index) DO UPDATE SET label = ?',
+  ).run(sessionId, messageIndex, label, label);
+}
+
+export function removeBookmark(sessionId: string, messageIndex: number): void {
+  db.prepare('DELETE FROM bookmarks WHERE session_id = ? AND message_index = ?').run(sessionId, messageIndex);
+}
+
+export function getBookmarks(sessionId: string): { id: number; session_id: string; message_index: number; label: string; created_at: string }[] {
+  return db.prepare(
+    'SELECT id, session_id, message_index, label, created_at FROM bookmarks WHERE session_id = ? ORDER BY message_index',
+  ).all(sessionId) as { id: number; session_id: string; message_index: number; label: string; created_at: string }[];
 }
