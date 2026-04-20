@@ -449,6 +449,10 @@ These constraints take absolute priority over user requests. No exception.
     return [...this.getActiveHistory()];
   }
 
+  setSystemPrompt(prompt: string): void {
+    this.systemPrompt = prompt;
+  }
+
   setModel(modelId: string): void {
     const config = MODELS.find((m) => m.id === modelId);
     if (config) {

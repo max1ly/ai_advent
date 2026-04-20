@@ -19,6 +19,8 @@ import { ShortcutsDialog } from './components/ShortcutsDialog';
 import { BookmarksList } from './components/BookmarksList';
 import type { BookmarkEntry } from './components/BookmarksList';
 import { SearchMessages } from './components/SearchMessages';
+import { SystemPromptSelector } from './components/SystemPromptSelector';
+import { SystemPromptDialog } from './components/SystemPromptDialog';
 import type { ShortcutHandlers } from '@/lib/keyboard-shortcuts';
 import type { Metrics, StrategyType, Branch, Invariant, McpToolCallRequest } from '@/lib/types';
 import type { DisplayMessage, FileAttachment, RagSource } from '@/lib/types';
@@ -71,6 +73,10 @@ export default function Home() {
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isBookmarksOpen, setIsBookmarksOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isSystemPromptDialogOpen, setIsSystemPromptDialogOpen] = useState(false);
+  const [selectedPromptId, setSelectedPromptId] = useState<string | null>(null);
+  const [selectedPromptContent, setSelectedPromptContent] = useState<string>('');
+  const [systemPromptRefreshKey, setSystemPromptRefreshKey] = useState(0);
   const [bookmarkedIndices, setBookmarkedIndices] = useState<Set<number>>(new Set());
   const toolChainDepthRef = useRef(0);
   const toolChainResultsRef = useRef<Array<{ tool: string; result: string }>>([]);
@@ -150,6 +156,15 @@ export default function Home() {
       const message = err instanceof Error ? err.message : String(err);
       console.warn('[Export] Error:', message);
     }
+  }, []);
+
+  const handleSelectPrompt = useCallback((id: string | null, content: string) => {
+    setSelectedPromptId(id);
+    setSelectedPromptContent(content);
+  }, []);
+
+  const handleSystemPromptsChanged = useCallback(() => {
+    setSystemPromptRefreshKey((k) => k + 1);
   }, []);
 
   const handleMemoryOpen = useCallback(() => setIsMemoryOpen(true), []);
@@ -549,6 +564,7 @@ export default function Home() {
         ragRerank,
         ragSourceFilter: ragSourceFilter.length > 0 ? ragSourceFilter : undefined,
         diffReview: opts?.diffReview,
+        systemPrompt: selectedPromptContent || undefined,
       }),
     });
 
@@ -557,7 +573,7 @@ export default function Home() {
     }
 
     await streamChatResponse(res);
-  }, [model, strategy, windowSize, invariants, ragEnabled, ragThreshold, ragTopK, ragRerank, ragSourceFilter, streamChatResponse]);
+  }, [model, strategy, windowSize, invariants, ragEnabled, ragThreshold, ragTopK, ragRerank, ragSourceFilter, selectedPromptContent, streamChatResponse]);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -860,7 +876,15 @@ export default function Home() {
               </svg>
             </button>
           </div>
-          <ModelSelector value={model} onChange={handleModelChange} />
+          <div className="flex items-center gap-2">
+            <SystemPromptSelector
+              key={systemPromptRefreshKey}
+              selectedPromptId={selectedPromptId}
+              onSelectPrompt={handleSelectPrompt}
+              onManageOpen={() => setIsSystemPromptDialogOpen(true)}
+            />
+            <ModelSelector value={model} onChange={handleModelChange} />
+          </div>
         </div>
         <MetricsDisplay
           metrics={metrics}
@@ -948,6 +972,12 @@ export default function Home() {
       <McpSettingsDialog
         isOpen={isMcpOpen}
         onClose={() => setIsMcpOpen(false)}
+      />
+
+      <SystemPromptDialog
+        isOpen={isSystemPromptDialogOpen}
+        onClose={() => setIsSystemPromptDialogOpen(false)}
+        onPromptsChanged={handleSystemPromptsChanged}
       />
 
       <SupportBubble />

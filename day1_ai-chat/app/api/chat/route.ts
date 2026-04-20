@@ -4,7 +4,7 @@ import { getOrCreateAgent } from '@/lib/sessions';
 import type { StrategyType } from '@/lib/types';
 
 export async function POST(req: Request) {
-  const { message, sessionId, model, files, strategy, windowSize, profileId, invariants, forceToolUse, ragEnabled, ragThreshold, ragTopK, ragRerank, ragSourceFilter, diffReview } = await req.json();
+  const { message, sessionId, model, files, strategy, windowSize, profileId, invariants, forceToolUse, ragEnabled, ragThreshold, ragTopK, ragRerank, ragSourceFilter, diffReview, systemPrompt } = await req.json();
 
   if (ragThreshold !== undefined && ragThreshold !== null) {
     const threshold = Number(ragThreshold);
@@ -36,6 +36,11 @@ export async function POST(req: Request) {
   const { agent, sessionId: sid } = getOrCreateAgent(sessionId, model, strategySettings);
 
   try {
+    // Override agent's system prompt if provided by the client
+    if (systemPrompt && typeof systemPrompt === 'string') {
+      agent.setSystemPrompt(systemPrompt);
+    }
+
     const stream = agent.chat(message, files, {
       profileId: profileId ? Number(profileId) : undefined,
       invariants: invariants as string[] | undefined,

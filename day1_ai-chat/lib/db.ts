@@ -112,6 +112,14 @@ function createDatabase(): Database.Database {
       created_at TEXT DEFAULT (datetime('now'))
     );
     CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_session_msg ON bookmarks(session_id, message_index);
+
+    CREATE TABLE IF NOT EXISTS system_prompts (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      content TEXT NOT NULL,
+      is_default INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
   `);
 
   // FTS5 full-text search for messages (with fallback if FTS5 unavailable)
