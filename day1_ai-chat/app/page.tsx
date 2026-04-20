@@ -64,6 +64,30 @@ export default function Home() {
   const toolChainResultsRef = useRef<Array<{ tool: string; result: string }>>([]);
   const currentAssistantMsgIdRef = useRef<string>('');
 
+  const handleExport = useCallback(async () => {
+    if (!sessionIdRef.current) return;
+    try {
+      const res = await fetch(`/api/chat/export?sessionId=${encodeURIComponent(sessionIdRef.current)}`);
+      if (!res.ok) {
+        const data = await res.json();
+        console.warn('[Export] Failed:', data.error);
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `chat-export-${sessionIdRef.current.slice(0, 8)}.md`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn('[Export] Error:', message);
+    }
+  }, []);
+
   const handleMemoryOpen = useCallback(() => setIsMemoryOpen(true), []);
 
   const handleRagToggle = useCallback((enabled: boolean) => {
@@ -701,6 +725,7 @@ export default function Home() {
           onRagTopKChange={handleRagTopKChange}
           ragRerank={ragRerank}
           onRagRerankToggle={handleRagRerankToggle}
+          onExport={handleExport}
         />
       </header>
 

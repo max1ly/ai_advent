@@ -25,6 +25,7 @@ export interface MetricsDisplayProps {
   onRagTopKChange: (value: number) => void;
   ragRerank: boolean;
   onRagRerankToggle: (enabled: boolean) => void;
+  onExport?: () => void;
 }
 
 export function MetricsDisplay({
@@ -50,6 +51,7 @@ export function MetricsDisplay({
   onRagTopKChange,
   ragRerank,
   onRagRerankToggle,
+  onExport,
 }: MetricsDisplayProps) {
   return (
     <>
@@ -181,6 +183,17 @@ export function MetricsDisplay({
         >
           New Chat
         </button>
+
+        {/* Export button */}
+        {onExport && (
+          <button
+            onClick={onExport}
+            className="px-3 py-1 rounded text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 active:scale-95 transition-all"
+            title="Export conversation as markdown"
+          >
+            Export
+          </button>
+        )}
       </div>
 
       {/* Row 2: RAG controls */}
