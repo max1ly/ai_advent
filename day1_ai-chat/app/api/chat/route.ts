@@ -1,9 +1,32 @@
 import { createUIMessageStreamResponse, createUIMessageStream } from 'ai';
+import { NextResponse } from 'next/server';
 import { getOrCreateAgent } from '@/lib/sessions';
 import type { StrategyType } from '@/lib/types';
 
 export async function POST(req: Request) {
   const { message, sessionId, model, files, strategy, windowSize, profileId, invariants, forceToolUse, ragEnabled, ragThreshold, ragTopK, ragRerank, ragSourceFilter, diffReview } = await req.json();
+
+  if (ragThreshold !== undefined && ragThreshold !== null) {
+    const threshold = Number(ragThreshold);
+    if (Number.isNaN(threshold)) {
+      return NextResponse.json(
+        { error: 'ragThreshold must be a valid number' },
+        { status: 400 },
+      );
+    }
+    if (threshold < 0) {
+      return NextResponse.json(
+        { error: 'ragThreshold must not be negative' },
+        { status: 400 },
+      );
+    }
+    if (threshold > 1) {
+      return NextResponse.json(
+        { error: 'ragThreshold must not exceed 1' },
+        { status: 400 },
+      );
+    }
+  }
 
   const strategySettings = {
     type: (strategy as StrategyType) ?? 'sliding-window',
