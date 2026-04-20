@@ -278,7 +278,10 @@ export default function Home() {
       }
     }
 
-    const reader = res.body!.getReader();
+    if (!res.body) {
+      throw new Error('Response body is null — streaming is not supported by this environment');
+    }
+    const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
     let assistantText = '';
