@@ -6,7 +6,8 @@ import { MODELS, type ModelConfig } from '@/lib/models';
 import { memoryManager } from '@/lib/memory';
 import { getProfileById } from '@/lib/db';
 import { TaskStateMachine, parseTransitionSignals, detectTaskIntent, detectApprovalIntent, detectRejectionIntent } from '@/lib/task-state';
-import type { StrategySettings, StrategyType, SessionMetrics, LastRequestMetrics, Branch } from '@/lib/types';
+import type { StrategySettings, StrategyType, SessionMetrics, Branch } from '@/lib/types';
+import { createInitialSessionMetrics, updateSessionMetrics, buildLastRequestMetrics, computeDurationMs, buildMetricsPayload } from '@/lib/agent-metrics';
 import type { McpManager } from '@/lib/mcp/manager';
 import { createSearchDocumentsTool } from '@/lib/rag/tool';
 import { retrieveRelevant } from '@/lib/rag/retriever';
@@ -94,13 +95,7 @@ export class ChatAgent {
       this.strategy = opts.strategy.type;
       this.windowSize = opts.strategy.windowSize;
     }
-    this.sessionMetrics = {
-      totalInputTokens: 0,
-      totalOutputTokens: 0,
-      totalTokens: 0,
-      totalStrategyTokens: 0,
-      exchanges: 0,
-    };
+    this.sessionMetrics = createInitialSessionMetrics();
     this.taskState = new TaskStateMachine(this.sessionId);
     this.mcpManager = opts?.mcpManager ?? null;
   }
@@ -360,15 +355,13 @@ Rules:
 
             const inputTokens = usage?.inputTokens ?? 0;
             const outputTokens = usage?.outputTokens ?? 0;
+            const usageInfo = { inputTokens, outputTokens };
 
-            this.sessionMetrics.totalInputTokens += inputTokens;
-            this.sessionMetrics.totalOutputTokens += outputTokens;
-            this.sessionMetrics.totalTokens += inputTokens + outputTokens + strategyTokens;
-            this.sessionMetrics.totalStrategyTokens += strategyTokens;
-            this.sessionMetrics.exchanges += 1;
+            updateSessionMetrics(this.sessionMetrics, usageInfo, strategyTokens);
 
+            const durationMs = computeDurationMs(startTime);
             console.log(`\x1b[32m[Agent]\x1b[0m Response complete:
-  Time:     ${Date.now() - startTime}ms
+  Time:     ${durationMs}ms
   Tokens:   ${inputTokens + outputTokens} (${inputTokens} in + ${outputTokens} out)
   Strategy: ${strategyTokens} tokens overhead
   History:  ${this.getActiveHistory().length} messages`);
@@ -433,30 +426,25 @@ Rules:
           });
         }
 
-        const inputTokens = finalUsage?.inputTokens ?? 0;
-        const outputTokens = finalUsage?.outputTokens ?? 0;
-        const lastRequest: LastRequestMetrics = {
-          inputTokens,
-          outputTokens,
-          totalTokens: inputTokens + outputTokens,
+        const finalInputTokens = finalUsage?.inputTokens ?? 0;
+        const finalOutputTokens = finalUsage?.outputTokens ?? 0;
+        const lastRequest = buildLastRequestMetrics(
+          { inputTokens: finalInputTokens, outputTokens: finalOutputTokens },
           strategyTokens,
-        };
+        );
 
         const currentTaskState = this.taskState.getState();
+        const metricsPayload = buildMetricsPayload(lastRequest, this.sessionMetrics, {
+          status: currentTaskState.status,
+          currentStep: currentTaskState.currentStep,
+          planLength: currentTaskState.plan.length,
+          paused: currentTaskState.paused,
+          needsApproval: currentTaskState.status === 'review' || currentTaskState.status === 'validation',
+        });
 
         writer.write({
           type: 'data-metrics',
-          data: {
-            lastRequest,
-            session: { ...this.sessionMetrics },
-            taskState: {
-              status: currentTaskState.status,
-              currentStep: currentTaskState.currentStep,
-              planLength: currentTaskState.plan.length,
-              paused: currentTaskState.paused,
-              needsApproval: currentTaskState.status === 'review' || currentTaskState.status === 'validation',
-            },
-          },
+          data: metricsPayload,
         });
 
         // Emit RAG sources — from pre-search (weak models) or tool results (strong models)
@@ -542,13 +530,7 @@ Rules:
     this.branches = [];
     this.activeBranchId = null;
     this.checkpointHistory = null;
-    this.sessionMetrics = {
-      totalInputTokens: 0,
-      totalOutputTokens: 0,
-      totalTokens: 0,
-      totalStrategyTokens: 0,
-      exchanges: 0,
-    };
+    this.sessionMetrics = createInitialSessionMetrics();
   }
 
   getFacts(): Record<string, string> {
