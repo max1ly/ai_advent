@@ -24,6 +24,10 @@ const VALID_TRANSITIONS: Record<TaskStatus, TransitionSignal[]> = {
   failed: ['TASK_START'],
 };
 
+/**
+ * Payload data accompanying a state transition signal.
+ * Contains optional fields relevant to different transition types.
+ */
 export interface TransitionPayload {
   taskDescription?: string;
   plan?: string[];
@@ -32,6 +36,10 @@ export interface TransitionPayload {
   summary?: string;
 }
 
+/**
+ * A transition signal parsed from LLM output text.
+ * Includes the signal type and an optional step number for STEP_COMPLETE signals.
+ */
 export interface ParsedSignal {
   type: TransitionSignal;
   step?: number;
