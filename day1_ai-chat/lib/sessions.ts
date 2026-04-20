@@ -4,7 +4,27 @@ import type { ChatFile } from '@/lib/agent';
 import type { StrategySettings } from '@/lib/types';
 import { mcpManager } from '@/lib/mcp/manager';
 
-const sessions = new Map<string, ChatAgent>();
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+
+interface SessionEntry {
+  agent: ChatAgent;
+  lastAccessed: number;
+}
+
+const sessions = new Map<string, SessionEntry>();
+
+function cleanupStaleSessions(): void {
+  const now = Date.now();
+  for (const [id, entry] of sessions) {
+    if (now - entry.lastAccessed > SESSION_TTL_MS) {
+      sessions.delete(id);
+    }
+  }
+}
+
+const cleanupTimer = setInterval(cleanupStaleSessions, CLEANUP_INTERVAL_MS);
+cleanupTimer.unref();
 
 export function getOrCreateAgent(
   sessionId: string | null,
@@ -12,14 +32,15 @@ export function getOrCreateAgent(
   strategy?: StrategySettings,
 ): { agent: ChatAgent; sessionId: string } {
   if (sessionId && sessions.has(sessionId)) {
-    const agent = sessions.get(sessionId)!;
+    const entry = sessions.get(sessionId)!;
+    entry.lastAccessed = Date.now();
     if (model) {
-      agent.setModel(model);
+      entry.agent.setModel(model);
     }
     if (strategy) {
-      agent.setStrategy(strategy);
+      entry.agent.setStrategy(strategy);
     }
-    return { agent, sessionId };
+    return { agent: entry.agent, sessionId };
   }
 
   const sid = sessionId ?? crypto.randomUUID();
@@ -52,14 +73,20 @@ export function getOrCreateAgent(
     );
   }
 
-  sessions.set(sid, agent);
+  sessions.set(sid, { agent, lastAccessed: Date.now() });
   return { agent, sessionId: sid };
 }
 
 export function getAgent(sessionId: string): ChatAgent | null {
-  return sessions.get(sessionId) ?? null;
+  const entry = sessions.get(sessionId);
+  if (!entry) return null;
+  entry.lastAccessed = Date.now();
+  return entry.agent;
 }
 
 export function deleteSession(sessionId: string): void {
   sessions.delete(sessionId);
 }
+
+/** Exported for testing — manually trigger stale session cleanup. */
+export { cleanupStaleSessions, SESSION_TTL_MS, CLEANUP_INTERVAL_MS };
