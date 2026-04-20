@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   getWorkingMemory,
   saveWorkingMemory,
@@ -16,6 +16,10 @@ import {
 } from '@/lib/db';
 import { MemoryManager } from '@/lib/memory';
 import type { MemoryExtractionResult } from '@/lib/types';
+
+vi.mock('ai', () => ({
+  generateText: vi.fn(),
+}));
 
 beforeEach(() => {
   clearAllMemory();
@@ -311,5 +315,183 @@ describe('clearAllMemory', () => {
     expect(getProfile()).toHaveLength(0);
     expect(getSolutions()).toHaveLength(0);
     expect(getKnowledge()).toHaveLength(0);
+  });
+});
+
+// --- extractMemory ---
+
+describe('MemoryManager.extractMemory', () => {
+  const mm = new MemoryManager();
+  const mockModel = {} as Parameters<typeof import('ai').generateText>[0]['model'];
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it('extracts memory from a valid LLM response and persists it', async () => {
+    const { generateText } = await import('ai');
+    const mockedGenerateText = vi.mocked(generateText);
+
+    const llmResponse = JSON.stringify({
+      working_memory: { task_description: 'build auth', progress: 'started', hypotheses: 'JWT', is_new_task: true },
+      profile: [{ key: 'name', value: 'Max', operation: 'ADD' }],
+      solutions: null,
+      knowledge: [{ fact: 'Uses Next.js 15', source: 'conversation', operation: 'ADD' }],
+    });
+
+    mockedGenerateText.mockResolvedValue({
+      text: llmResponse,
+      usage: { inputTokens: 100, outputTokens: 50 },
+    } as never);
+
+    const tokens = await mm.extractMemory('My name is Max and I am building auth', '', 'session-ext', mockModel);
+
+    expect(tokens).toBe(150);
+    expect(mockedGenerateText).toHaveBeenCalledOnce();
+
+    // Verify persistence
+    const wm = getWorkingMemory('session-ext');
+    expect(wm).not.toBeNull();
+    expect(wm!.task_description).toBe('build auth');
+
+    const profile = getProfile();
+    expect(profile).toHaveLength(1);
+    expect(profile[0].value).toBe('Max');
+
+    const knowledge = getKnowledge();
+    expect(knowledge).toHaveLength(1);
+    expect(knowledge[0].fact).toBe('Uses Next.js 15');
+  });
+
+  it('handles LLM response wrapped in markdown code block', async () => {
+    const { generateText } = await import('ai');
+    const mockedGenerateText = vi.mocked(generateText);
+
+    const jsonContent = JSON.stringify({
+      working_memory: { task_description: 'testing', progress: '', hypotheses: '', is_new_task: true },
+      profile: [],
+      solutions: null,
+      knowledge: [],
+    });
+
+    mockedGenerateText.mockResolvedValue({
+      text: '```json\n' + jsonContent + '\n```',
+      usage: { inputTokens: 80, outputTokens: 30 },
+    } as never);
+
+    const tokens = await mm.extractMemory('I am testing', '', 'session-md', mockModel);
+
+    expect(tokens).toBe(110);
+    const wm = getWorkingMemory('session-md');
+    expect(wm).not.toBeNull();
+    expect(wm!.task_description).toBe('testing');
+  });
+
+  it('returns 0 and does not throw when generateText rejects', async () => {
+    const { generateText } = await import('ai');
+    const mockedGenerateText = vi.mocked(generateText);
+
+    mockedGenerateText.mockRejectedValue(new Error('API rate limit exceeded'));
+
+    const tokens = await mm.extractMemory('hello', '', 'session-err', mockModel);
+
+    expect(tokens).toBe(0);
+    // No memory should be persisted
+    expect(getWorkingMemory('session-err')).toBeNull();
+  });
+
+  it('returns 0 when LLM returns invalid JSON', async () => {
+    const { generateText } = await import('ai');
+    const mockedGenerateText = vi.mocked(generateText);
+
+    mockedGenerateText.mockResolvedValue({
+      text: 'This is not valid JSON at all.',
+      usage: { inputTokens: 50, outputTokens: 20 },
+    } as never);
+
+    const tokens = await mm.extractMemory('something', '', 'session-bad-json', mockModel);
+
+    expect(tokens).toBe(0);
+    expect(getWorkingMemory('session-bad-json')).toBeNull();
+  });
+
+  it('returns 0 when a non-Error is thrown', async () => {
+    const { generateText } = await import('ai');
+    const mockedGenerateText = vi.mocked(generateText);
+
+    mockedGenerateText.mockRejectedValue('string error');
+
+    const tokens = await mm.extractMemory('hi', '', 'session-str-err', mockModel);
+
+    expect(tokens).toBe(0);
+  });
+
+  it('includes existing memory context in the prompt to generateText', async () => {
+    const { generateText } = await import('ai');
+    const mockedGenerateText = vi.mocked(generateText);
+
+    // Seed existing memory
+    saveWorkingMemory('session-ctx', 'existing task', 'some progress', '');
+    saveProfileEntry('name', 'Max');
+    saveKnowledge('fact one', 'conversation');
+
+    mockedGenerateText.mockResolvedValue({
+      text: JSON.stringify({
+        working_memory: null,
+        profile: [],
+        solutions: null,
+        knowledge: [],
+      }),
+      usage: { inputTokens: 200, outputTokens: 40 },
+    } as never);
+
+    await mm.extractMemory('continue', '', 'session-ctx', mockModel);
+
+    const callArgs = mockedGenerateText.mock.calls[0][0];
+    expect(callArgs.prompt).toContain('existing task');
+    expect(callArgs.prompt).toContain('name=Max');
+    expect(callArgs.prompt).toContain('fact one');
+  });
+
+  it('handles missing usage gracefully (defaults to 0)', async () => {
+    const { generateText } = await import('ai');
+    const mockedGenerateText = vi.mocked(generateText);
+
+    mockedGenerateText.mockResolvedValue({
+      text: JSON.stringify({
+        working_memory: null,
+        profile: [],
+        solutions: null,
+        knowledge: [],
+      }),
+      usage: undefined,
+    } as never);
+
+    const tokens = await mm.extractMemory('test', '', 'session-no-usage', mockModel);
+
+    expect(tokens).toBe(0);
+  });
+
+  it('persists solutions when extraction includes a completed task', async () => {
+    const { generateText } = await import('ai');
+    const mockedGenerateText = vi.mocked(generateText);
+
+    mockedGenerateText.mockResolvedValue({
+      text: JSON.stringify({
+        working_memory: null,
+        profile: [],
+        solutions: { task: 'deploy to prod', steps: ['build', 'push', 'verify'], outcome: 'success' },
+        knowledge: [],
+      }),
+      usage: { inputTokens: 60, outputTokens: 40 },
+    } as never);
+
+    const tokens = await mm.extractMemory('I deployed successfully', '', 'session-sol', mockModel);
+
+    expect(tokens).toBe(100);
+    const solutions = getSolutions();
+    expect(solutions).toHaveLength(1);
+    expect(solutions[0].task).toBe('deploy to prod');
+    expect(JSON.parse(solutions[0].steps)).toEqual(['build', 'push', 'verify']);
   });
 });
