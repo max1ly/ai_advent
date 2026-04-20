@@ -7,8 +7,18 @@ const inputSchema = z.object({
 });
 
 /**
- * Factory function to create a parameterized search_documents tool.
- * Captures threshold and topK in closure per-request.
+ * Creates a parameterized RAG search tool for the AI SDK.
+ *
+ * Returns an AI SDK `tool()` instance that searches indexed documents for
+ * relevant passages using vector similarity. Configuration options are
+ * captured in closure so each agent session can use distinct retrieval params.
+ *
+ * @param opts - Optional retrieval configuration.
+ * @param opts.threshold - Minimum similarity score (0–1) for results. Defaults to `0.3`.
+ * @param opts.topK - Maximum number of passages to return. Defaults to `10`.
+ * @param opts.rerank - Whether to rerank results for relevance. Defaults to `true`.
+ * @param opts.sourceFilter - Optional list of source identifiers to restrict search scope.
+ * @returns An AI SDK tool that accepts a `query` string and returns matching passages.
  */
 export function createSearchDocumentsTool(opts?: { threshold?: number; topK?: number; rerank?: boolean; sourceFilter?: string[] }) {
   const threshold = opts?.threshold ?? 0.3;
