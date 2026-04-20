@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ChatContainer from './components/ChatContainer';
 import ChatInput from './components/ChatInput';
 import type { PendingFile } from './components/ChatInput';
@@ -14,6 +14,9 @@ import McpSettingsDialog from './components/McpSettingsDialog';
 import ToolConfirmDialog from './components/ToolConfirmDialog';
 import SupportBubble from './components/SupportBubble';
 import { SessionHistory } from './components/SessionHistory';
+import { KeyboardShortcuts } from './components/KeyboardShortcuts';
+import { ShortcutsDialog } from './components/ShortcutsDialog';
+import type { ShortcutHandlers } from '@/lib/keyboard-shortcuts';
 import type { Metrics, StrategyType, Branch, Invariant, McpToolCallRequest } from '@/lib/types';
 import type { DisplayMessage, FileAttachment, RagSource } from '@/lib/types';
 import type { PendingWriteData } from './components/ChatMessage';
@@ -62,6 +65,7 @@ export default function Home() {
   const [pendingToolCall, setPendingToolCall] = useState<McpToolCallRequest | null>(null);
   const [pendingWrites, setPendingWrites] = useState<Array<PendingWriteData & { messageId: string }>>([]);
   const [isSessionHistoryOpen, setIsSessionHistoryOpen] = useState(false);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const toolChainDepthRef = useRef(0);
   const toolChainResultsRef = useRef<Array<{ tool: string; result: string }>>([]);
   const currentAssistantMsgIdRef = useRef<string>('');
@@ -713,6 +717,36 @@ export default function Home() {
     });
   }, []);
 
+  const handleCopyLastAssistantMessage = useCallback(() => {
+    const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant' && m.content);
+    if (lastAssistant?.content) {
+      navigator.clipboard.writeText(lastAssistant.content).catch((err) =>
+        console.log('[Shortcuts] Copy failed:', err instanceof Error ? err.message : String(err)),
+      );
+    }
+  }, [messages]);
+
+  const handleToggleSidebar = useCallback(() => {
+    setIsSessionHistoryOpen((prev) => !prev);
+  }, []);
+
+  const handleCloseDialog = useCallback(() => {
+    if (isShortcutsOpen) { setIsShortcutsOpen(false); return; }
+    if (isMemoryOpen) { setIsMemoryOpen(false); return; }
+    if (isInvariantsOpen) { setIsInvariantsOpen(false); return; }
+    if (isMcpOpen) { setIsMcpOpen(false); return; }
+    if (isIndexOpen) { setIsIndexOpen(false); return; }
+    if (isSessionHistoryOpen) { setIsSessionHistoryOpen(false); return; }
+  }, [isShortcutsOpen, isMemoryOpen, isInvariantsOpen, isMcpOpen, isIndexOpen, isSessionHistoryOpen]);
+
+  const shortcutHandlers: ShortcutHandlers = useMemo(() => ({
+    onNewChat: handleNewChat,
+    onToggleSidebar: handleToggleSidebar,
+    onCopyLastAssistantMessage: handleCopyLastAssistantMessage,
+    onCloseDialog: handleCloseDialog,
+    onShowHelp: () => setIsShortcutsOpen(true),
+  }), [handleNewChat, handleToggleSidebar, handleCopyLastAssistantMessage, handleCloseDialog]);
+
   return (
     <div className="flex flex-col h-screen bg-gray-50 lg:max-w-[66%] mx-auto lg:shadow-lg">
       {/* Header */}
@@ -835,6 +869,13 @@ export default function Home() {
         isOpen={isSessionHistoryOpen}
         onClose={() => setIsSessionHistoryOpen(false)}
       />
+
+      <ShortcutsDialog
+        isOpen={isShortcutsOpen}
+        onClose={() => setIsShortcutsOpen(false)}
+      />
+
+      <KeyboardShortcuts handlers={shortcutHandlers} />
     </div>
   );
 }
