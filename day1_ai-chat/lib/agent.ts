@@ -109,7 +109,7 @@ export class ChatAgent {
     const profileId = options?.profileId;
     const invariants = options?.invariants;
     const forceToolUse = options?.forceToolUse;
-    const ragEnabled = options?.ragEnabled;
+    let ragEnabled = options?.ragEnabled;
     const ragThreshold = options?.ragThreshold;
     const ragTopK = options?.ragTopK;
     const ragRerank = options?.ragRerank;
@@ -254,7 +254,10 @@ Rules:
             new Promise((_, reject) => setTimeout(() => reject(new Error('Indexing timed out (5s)')), 5000)),
           ]);
         } catch (err) {
-          console.error('\x1b[31m[Agent]\x1b[0m Project doc indexing failed (Ollama may not be running):', err instanceof Error ? err.message : err);
+          const message = err instanceof Error ? err.message : String(err);
+          console.error('\x1b[31m[Agent]\x1b[0m Project doc indexing failed (Ollama may not be running):', message);
+          // Disable RAG for this session so chat can continue without embeddings
+          ragEnabled = false;
         }
         const projectSources = getProjectDocSources();
         const gitTools = getDevAssistantTools();
