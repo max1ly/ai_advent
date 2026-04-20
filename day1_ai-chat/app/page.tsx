@@ -603,8 +603,10 @@ export default function Home() {
       setStatus('submitted');
 
       await sendAndStream(continuationMsg, { forceToolUse: shouldForceToolUse });
-    } catch (err) {
-      console.error('[MCP] Tool execution failed:', err);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('[MCP] Tool execution failed:', message);
+      setError(err instanceof Error ? err : new Error(message));
     } finally {
       setStatus('ready');
     }
