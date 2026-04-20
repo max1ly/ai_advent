@@ -114,6 +114,27 @@ function createDatabase(): Database.Database {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_session_msg ON bookmarks(session_id, message_index);
   `);
 
+  // FTS5 full-text search for messages (with fallback if FTS5 unavailable)
+  try {
+    db.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(content, session_id UNINDEXED);
+
+      CREATE TRIGGER IF NOT EXISTS messages_fts_insert AFTER INSERT ON messages
+      BEGIN
+        INSERT INTO messages_fts(rowid, content, session_id) VALUES (NEW.id, NEW.content, NEW.session_id);
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS messages_fts_delete AFTER DELETE ON messages
+      BEGIN
+        INSERT INTO messages_fts(messages_fts, rowid, content, session_id) VALUES ('delete', OLD.id, OLD.content, OLD.session_id);
+      END;
+    `);
+    console.log('\x1b[36m[DB]\x1b[0m FTS5 enabled for messages');
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn('\x1b[33m[DB]\x1b[0m FTS5 not available, using LIKE fallback:', message);
+  }
+
   console.log('\x1b[36m[DB]\x1b[0m SQLite initialized (WAL mode)');
   return db;
 }
@@ -453,4 +474,75 @@ export function getBookmarks(sessionId: string): { id: number; session_id: strin
   return db.prepare(
     'SELECT id, session_id, message_index, label, created_at FROM bookmarks WHERE session_id = ? ORDER BY message_index',
   ).all(sessionId) as { id: number; session_id: string; message_index: number; label: string; created_at: string }[];
+}
+
+// --- Message Search ---
+
+export interface SearchResult {
+  session_id: string;
+  message_index: number;
+  role: string;
+  content: string;
+  snippet: string;
+}
+
+function hasFts5(): boolean {
+  try {
+    db.prepare("SELECT * FROM messages_fts LIMIT 0").run();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function searchMessages(query: string, sessionId?: string): SearchResult[] {
+  if (!query.trim()) return [];
+
+  if (hasFts5()) {
+    // FTS5 search with snippet highlighting
+    const sql = sessionId
+      ? `SELECT m.session_id, m.role, m.content,
+           snippet(messages_fts, 0, '<mark>', '</mark>', '...', 32) as snippet,
+           (SELECT COUNT(*) FROM messages m2 WHERE m2.session_id = m.session_id AND m2.id < m.id) as message_index
+         FROM messages_fts fts
+         JOIN messages m ON m.id = fts.rowid
+         WHERE messages_fts MATCH ? AND fts.session_id = ?
+         ORDER BY rank
+         LIMIT 50`
+      : `SELECT m.session_id, m.role, m.content,
+           snippet(messages_fts, 0, '<mark>', '</mark>', '...', 32) as snippet,
+           (SELECT COUNT(*) FROM messages m2 WHERE m2.session_id = m.session_id AND m2.id < m.id) as message_index
+         FROM messages_fts fts
+         JOIN messages m ON m.id = fts.rowid
+         WHERE messages_fts MATCH ?
+         ORDER BY rank
+         LIMIT 50`;
+
+    // Sanitize query for FTS5 — wrap each token in quotes to avoid syntax errors
+    const sanitized = query.trim().split(/\s+/).map(t => `"${t.replace(/"/g, '""')}"`).join(' ');
+
+    const params = sessionId ? [sanitized, sessionId] : [sanitized];
+    return db.prepare(sql).all(...params) as SearchResult[];
+  }
+
+  // Fallback: LIKE-based search
+  const likePattern = `%${query.trim()}%`;
+  const sql = sessionId
+    ? `SELECT m.session_id, m.role, m.content,
+         m.content as snippet,
+         (SELECT COUNT(*) FROM messages m2 WHERE m2.session_id = m.session_id AND m2.id < m.id) as message_index
+       FROM messages m
+       WHERE m.content LIKE ? AND m.session_id = ?
+       ORDER BY m.id DESC
+       LIMIT 50`
+    : `SELECT m.session_id, m.role, m.content,
+         m.content as snippet,
+         (SELECT COUNT(*) FROM messages m2 WHERE m2.session_id = m.session_id AND m2.id < m.id) as message_index
+       FROM messages m
+       WHERE m.content LIKE ?
+       ORDER BY m.id DESC
+       LIMIT 50`;
+
+  const params = sessionId ? [likePattern, sessionId] : [likePattern];
+  return db.prepare(sql).all(...params) as SearchResult[];
 }

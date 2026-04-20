@@ -18,6 +18,7 @@ import { KeyboardShortcuts } from './components/KeyboardShortcuts';
 import { ShortcutsDialog } from './components/ShortcutsDialog';
 import { BookmarksList } from './components/BookmarksList';
 import type { BookmarkEntry } from './components/BookmarksList';
+import { SearchMessages } from './components/SearchMessages';
 import type { ShortcutHandlers } from '@/lib/keyboard-shortcuts';
 import type { Metrics, StrategyType, Branch, Invariant, McpToolCallRequest } from '@/lib/types';
 import type { DisplayMessage, FileAttachment, RagSource } from '@/lib/types';
@@ -69,6 +70,7 @@ export default function Home() {
   const [isSessionHistoryOpen, setIsSessionHistoryOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isBookmarksOpen, setIsBookmarksOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [bookmarkedIndices, setBookmarkedIndices] = useState<Set<number>>(new Set());
   const toolChainDepthRef = useRef(0);
   const toolChainResultsRef = useRef<Array<{ tool: string; result: string }>>([]);
@@ -246,6 +248,18 @@ export default function Home() {
       .finally(() => {
         setIsLoading(false);
       });
+  }, []);
+
+  // Cmd/Ctrl+F to open search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+        e.preventDefault();
+        setIsSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   const handleModelChange = useCallback((modelId: string) => {
@@ -958,6 +972,14 @@ export default function Home() {
       />
 
       <KeyboardShortcuts handlers={shortcutHandlers} />
+
+      <SearchMessages
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+        currentSessionId={sessionIdRef.current}
+        onScrollToMessage={handleScrollToMessage}
+        onLoadSession={handleSelectSession}
+      />
     </div>
   );
 }
