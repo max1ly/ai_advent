@@ -249,6 +249,16 @@ export default function Home() {
   };
 
   const handleFilesSelected = useCallback((files: File[]) => {
+    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+    const oversized = files.filter((f) => f.size > MAX_FILE_SIZE);
+    if (oversized.length > 0) {
+      const names = oversized.map((f) => f.name).join(', ');
+      setError(new Error(`File${oversized.length > 1 ? 's' : ''} exceeded 50MB limit: ${names}`));
+      // Only keep files that are within the size limit
+      const valid = files.filter((f) => f.size <= MAX_FILE_SIZE);
+      if (valid.length === 0) return;
+      files = valid;
+    }
     const newPending: PendingFile[] = files.map((file) => {
       const pf: PendingFile = { file };
       if (file.type.startsWith('image/')) {
