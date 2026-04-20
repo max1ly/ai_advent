@@ -43,6 +43,8 @@ export default function Home() {
   const [error, setError] = useState<Error | null>(null);
   const [input, setInput] = useState('');
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const pendingFilesRef = useRef<PendingFile[]>(pendingFiles);
+  pendingFilesRef.current = pendingFiles;
   const sessionIdRef = useRef<string | null>(null);
   const msgCounterRef = useRef(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -275,6 +277,15 @@ export default function Home() {
       if (removed?.preview) URL.revokeObjectURL(removed.preview);
       return prev.filter((_, i) => i !== index);
     });
+  }, []);
+
+  // Revoke object URLs on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      pendingFilesRef.current.forEach((pf) => {
+        if (pf.preview) URL.revokeObjectURL(pf.preview);
+      });
+    };
   }, []);
 
   // Shared SSE stream handler — reads events and updates UI
