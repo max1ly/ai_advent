@@ -119,7 +119,13 @@ export default function Home() {
     sessionIdRef.current = savedSessionId;
     const savedInvariants = localStorage.getItem(`invariants-${savedSessionId}`);
     if (savedInvariants) {
-      try { setInvariants(JSON.parse(savedInvariants)); } catch {}
+      try {
+        setInvariants(JSON.parse(savedInvariants));
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn('[Invariants] Failed to parse saved invariants:', message);
+        setInvariants([]);
+      }
     }
     fetch(`/api/chat/${savedSessionId}`)
       .then((res) => {
