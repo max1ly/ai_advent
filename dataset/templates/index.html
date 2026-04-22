@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reddit Comment Labeler</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; }
+
+  .top-bar {
+    position: sticky; top: 0; z-index: 10;
+    background: #16213e; border-bottom: 1px solid #0f3460;
+    padding: 12px 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  .sub-badge {
+    background: #0f3460; color: #e94560; padding: 4px 10px; border-radius: 12px;
+    font-size: 13px; font-weight: 600;
+  }
+  .post-title { flex: 1; font-size: 15px; font-weight: 500; min-width: 200px; }
+  .stats {
+    font-size: 13px; color: #999; display: flex; gap: 8px;
+  }
+  .stats span { white-space: nowrap; }
+  .stats .labeled { color: #4ecca3; }
+  .stats .skipped { color: #e94560; }
+  .btn-next {
+    background: #0f3460; color: #eee; border: 1px solid #e94560; padding: 6px 14px;
+    border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500;
+  }
+  .btn-next:hover { background: #e94560; }
+
+  .main { max-width: 720px; margin: 0 auto; padding: 20px; }
+
+  .comment-card {
+    background: #16213e; border: 1px solid #0f3460; border-radius: 8px;
+    padding: 14px 16px; margin-bottom: 12px; transition: opacity 0.3s;
+  }
+  .comment-card.handled { opacity: 0.4; }
+  .comment-card .meta { font-size: 12px; color: #777; margin-bottom: 8px; }
+  .comment-card .meta .author { color: #4ecca3; }
+  .comment-card .body { font-size: 14px; line-height: 1.5; margin-bottom: 10px; white-space: pre-wrap; }
+  .comment-card .actions { display: flex; gap: 8px; align-items: center; }
+
+  .label-btn {
+    padding: 5px 14px; border-radius: 5px; border: none; cursor: pointer;
+    font-size: 13px; font-weight: 600; color: #fff; transition: transform 0.1s;
+  }
+  .label-btn:hover { transform: scale(1.05); }
+  .label-btn:active { transform: scale(0.95); }
+  .label-btn.positive { background: #4ecca3; color: #1a1a2e; }
+  .label-btn.neutral { background: #6c757d; }
+  .label-btn.negative { background: #e94560; }
+  .label-btn.skip { background: transparent; border: 1px solid #555; color: #999; }
+
+  .label-badge {
+    display: none; padding: 3px 10px; border-radius: 4px; font-size: 12px; font-weight: 600;
+  }
+  .comment-card.handled .label-badge { display: inline-block; }
+  .comment-card.handled .actions .label-btn { display: none; }
+  .badge-Positive { background: #4ecca3; color: #1a1a2e; }
+  .badge-Negative { background: #e94560; color: #fff; }
+  .badge-Neutral { background: #6c757d; color: #fff; }
+  .badge-Skipped { background: #333; color: #999; }
+
+  .empty-state {
+    text-align: center; padding: 60px 20px; color: #777;
+  }
+  .empty-state h2 { margin-bottom: 8px; color: #999; }
+
+  .loading { text-align: center; padding: 40px; color: #777; }
+  .queue-info { font-size: 12px; color: #555; }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <span class="sub-badge" id="sub-badge">r/...</span>
+  <span class="post-title" id="post-title">Loading...</span>
+  <div class="stats">
+    <span class="labeled" id="stat-labeled">0 labeled</span>
+    <span class="skipped" id="stat-skipped">0 skipped</span>
+    <span>|</span>
+    <span id="stat-total">0 in file</span>
+  </div>
+  <span class="queue-info" id="queue-info"></span>
+  <button class="btn-next" id="btn-next" onclick="nextPost()">Next Post &rarr;</button>
+</div>
+
+<div class="main" id="comments-container">
+  <div class="loading">Loading comments...</div>
+</div>
+
+<script>
+let handledCount = 0;
+let totalComments = 0;
+
+function updateStats(stats) {
+  document.getElementById('stat-labeled').textContent = stats.labeled + ' labeled';
+  document.getElementById('stat-skipped').textContent = stats.skipped + ' skipped';
+  document.getElementById('stat-total').textContent = stats.total_in_file + ' in file';
+}
+
+function renderPost(data) {
+  const container = document.getElementById('comments-container');
+  if (!data.post) {
+    container.innerHTML = '<div class="empty-state"><h2>No more posts</h2><p>All posts in the queue have been processed.</p></div>';
+    document.getElementById('post-title').textContent = 'Done';
+    document.getElementById('sub-badge').textContent = '—';
+    return;
+  }
+  document.getElementById('post-title').textContent = data.post.title;
+  document.getElementById('sub-badge').textContent = 'r/' + data.post.subreddit;
+  document.getElementById('queue-info').textContent = data.queue_remaining + ' posts left';
+  updateStats(data.stats);
+
+  totalComments = data.comments.length;
+  handledCount = 0;
+
+  if (data.comments.length === 0) {
+    container.innerHTML = '<div class="empty-state"><h2>No comments</h2><p>This post has no comments. Click Next Post to continue.</p></div>';
+    return;
+  }
+
+  container.innerHTML = data.comments.map((c, i) => `
+    <div class="comment-card" id="card-${i}">
+      <div class="meta">
+        <span class="author">u/${esc(c.author)}</span> · ${c.score} points
+      </div>
+      <div class="body">${esc(c.body)}</div>
+      <div class="actions">
+        <button class="label-btn positive" onclick="labelComment(${i}, 'Positive')">Positive</button>
+        <button class="label-btn neutral" onclick="labelComment(${i}, 'Neutral')">Neutral</button>
+        <button class="label-btn negative" onclick="labelComment(${i}, 'Negative')">Negative</button>
+        <button class="label-btn skip" onclick="skipComment(${i})">Skip</button>
+        <span class="label-badge" id="badge-${i}"></span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+async function labelComment(idx, label) {
+  const card = document.getElementById('card-' + idx);
+  if (card.classList.contains('handled')) return;
+  const body = card.querySelector('.body').textContent;
+  const resp = await fetch('/api/label', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({text: body, label: label}),
+  });
+  const data = await resp.json();
+  card.classList.add('handled');
+  const badge = document.getElementById('badge-' + idx);
+  badge.textContent = label;
+  badge.className = 'label-badge badge-' + label;
+  updateStats(data.stats);
+  handledCount++;
+  if (handledCount >= totalComments) autoAdvance();
+}
+
+async function skipComment(idx) {
+  const card = document.getElementById('card-' + idx);
+  if (card.classList.contains('handled')) return;
+  const resp = await fetch('/api/skip', {method: 'POST', headers: {'Content-Type': 'application/json'}});
+  const data = await resp.json();
+  card.classList.add('handled');
+  const badge = document.getElementById('badge-' + idx);
+  badge.textContent = 'Skipped';
+  badge.className = 'label-badge badge-Skipped';
+  updateStats(data.stats);
+  handledCount++;
+  if (handledCount >= totalComments) autoAdvance();
+}
+
+function autoAdvance() {
+  setTimeout(() => nextPost(), 600);
+}
+
+async function nextPost() {
+  document.getElementById('comments-container').innerHTML = '<div class="loading">Loading next post...</div>';
+  const resp = await fetch('/api/next-post', {method: 'POST'});
+  const data = await resp.json();
+  renderPost(data);
+}
+
+async function loadCurrent() {
+  const resp = await fetch('/api/post');
+  const data = await resp.json();
+  renderPost(data);
+}
+
+loadCurrent();
+</script>
+</body>
+</html>

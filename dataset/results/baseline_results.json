@@ -1,0 +1,100 @@
+{
+  "model": "gpt-4o-mini",
+  "num_examples": 10,
+  "accuracy": 0.9,
+  "format_compliance": 1.0,
+  "correct": 9,
+  "total": 10,
+  "predicted_distribution": {
+    "Negative": 4,
+    "Neutral": 2,
+    "Positive": 4
+  },
+  "expected_distribution": {
+    "Negative": 4,
+    "Neutral": 3,
+    "Positive": 3
+  },
+  "results": [
+    {
+      "index": 1,
+      "input": "Worst airline experience ever. Flight delayed 6 hours, lost my luggage, and the staff was completely unhelpful. Never flying with them again.",
+      "expected": "Negative",
+      "predicted": "Negative",
+      "match": true,
+      "valid_format": true
+    },
+    {
+      "index": 2,
+      "input": "There are currently three versions available: Basic ($9/mo), Pro ($19/mo), and Enterprise (custom pricing). Features comparison is on their site.",
+      "expected": "Neutral",
+      "predicted": "Neutral",
+      "match": true,
+      "valid_format": true
+    },
+    {
+      "index": 3,
+      "input": "This fkn meme with Drake is gonna be the death of me. Fuck Drake.",
+      "expected": "Negative",
+      "predicted": "Negative",
+      "match": true,
+      "valid_format": true
+    },
+    {
+      "index": 4,
+      "input": "The Dog Walker by R A Stone was an absolute delight, as I almost never read books about dating/romance! I typically read science fiction or adventure.",
+      "expected": "Positive",
+      "predicted": "Positive",
+      "match": true,
+      "valid_format": true
+    },
+    {
+      "index": 5,
+      "input": "Props to OP for sharing this. Saved me hours of debugging. The fix worked perfectly on the first try.",
+      "expected": "Positive",
+      "predicted": "Positive",
+      "match": true,
+      "valid_format": true
+    },
+    {
+      "index": 6,
+      "input": "He's doing a great job and havingvso much fun in a show i can't believe is still on.",
+      "expected": "Positive",
+      "predicted": "Positive",
+      "match": true,
+      "valid_format": true
+    },
+    {
+      "index": 7,
+      "input": "This subreddit used to be great but now it's just the same recycled memes and karma farming. Mods don't even try anymore.",
+      "expected": "Negative",
+      "predicted": "Negative",
+      "match": true,
+      "valid_format": true
+    },
+    {
+      "index": 8,
+      "input": "You can get the student discount by showing your university email at checkout. It's 15% off on most items.",
+      "expected": "Neutral",
+      "predicted": "Positive",
+      "match": false,
+      "valid_format": true
+    },
+    {
+      "index": 9,
+      "input": "\u201cOne dimensional\u201d describes all of Kuang\u2019s characters in every single book. She has interesting ideas, but her characters end up just being exposition dumps. Worse, in Babel she constantly  interrupts the flow to give yet another polemic against imperialism. She preaches to the choir so much I just can\u2019t read any more of her books. Perhaps after she gets out of her bubble, gets some life experience, and learns how to write humanity into her characters.",
+      "expected": "Negative",
+      "predicted": "Negative",
+      "match": true,
+      "valid_format": true
+    },
+    {
+      "index": 10,
+      "input": "According to the census data, the population grew by 2.3% last year. Most of the growth was in suburban areas.",
+      "expected": "Neutral",
+      "predicted": "Neutral",
+      "match": true,
+      "valid_format": true
+    }
+  ]
+}
