@@ -96,5 +96,31 @@
       "match": true,
       "valid_format": true
     }
-  ]
+  ],
+  "evaluation_criteria": {
+    "accuracy": {
+      "description": "Exact match between predicted and expected label",
+      "baseline": 0.9,
+      "target": 0.95,
+      "measurement": "correct predictions / total predictions"
+    },
+    "format_compliance": {
+      "description": "Model responds with exactly one of: Positive, Negative, Neutral (no extra text)",
+      "baseline": 1.0,
+      "target": 1.0,
+      "measurement": "valid format responses / total predictions"
+    },
+    "neutral_precision": {
+      "description": "Ability to distinguish neutral comments from positive/negative \u2014 the main weakness in baseline",
+      "baseline": "2/3 neutral correct (model classified 1 neutral as positive)",
+      "target": "100% neutral recall",
+      "measurement": "correctly predicted neutrals / total actual neutrals"
+    },
+    "consistency": {
+      "description": "Same input produces same output across multiple runs (temperature=0)",
+      "baseline": "not yet measured (single run)",
+      "target": "100% consistency across 3 runs",
+      "measurement": "identical outputs across repeated evaluations"
+    }
+  }
 }

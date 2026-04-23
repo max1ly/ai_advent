@@ -1,3 +1,4 @@
 .DS_Store
 docs/hyperpowers/
 dataset/docs/hyperpowers/
+*/**/.env
