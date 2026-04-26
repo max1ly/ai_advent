@@ -40,27 +40,43 @@
   .comment-card .meta { font-size: 12px; color: #777; margin-bottom: 8px; }
   .comment-card .meta .author { color: #4ecca3; }
   .comment-card .body { font-size: 14px; line-height: 1.5; margin-bottom: 10px; white-space: pre-wrap; }
+  .comment-card .triage-fields { margin-bottom: 10px; }
+  .field-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .field-label { font-size: 12px; color: #999; min-width: 70px; text-transform: uppercase; font-weight: 600; }
+  .field-options { display: flex; gap: 4px; flex-wrap: wrap; }
+
+  .opt-btn {
+    padding: 4px 12px; border-radius: 4px; border: 1px solid #0f3460; cursor: pointer;
+    font-size: 12px; font-weight: 600; color: #aaa; background: transparent; transition: all 0.15s;
+  }
+  .opt-btn:hover { border-color: #4ecca3; color: #eee; }
+  .opt-btn.selected { border-color: #4ecca3; background: #4ecca3; color: #1a1a2e; }
+  .opt-btn.selected.neg { background: #e94560; border-color: #e94560; color: #fff; }
+  .opt-btn.selected.warn { background: #f0a500; border-color: #f0a500; color: #1a1a2e; }
+
   .comment-card .actions { display: flex; gap: 8px; align-items: center; }
 
-  .label-btn {
-    padding: 5px 14px; border-radius: 5px; border: none; cursor: pointer;
-    font-size: 13px; font-weight: 600; color: #fff; transition: transform 0.1s;
+  .submit-btn {
+    padding: 5px 18px; border-radius: 5px; border: none; cursor: pointer;
+    font-size: 13px; font-weight: 600; background: #4ecca3; color: #1a1a2e; transition: transform 0.1s;
   }
-  .label-btn:hover { transform: scale(1.05); }
-  .label-btn:active { transform: scale(0.95); }
-  .label-btn.positive { background: #4ecca3; color: #1a1a2e; }
-  .label-btn.neutral { background: #6c757d; }
-  .label-btn.negative { background: #e94560; }
-  .label-btn.skip { background: transparent; border: 1px solid #555; color: #999; }
+  .submit-btn:hover { transform: scale(1.05); }
+  .submit-btn:active { transform: scale(0.95); }
+  .submit-btn:disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
+  .skip-btn {
+    padding: 5px 14px; border-radius: 5px; border: 1px solid #555; cursor: pointer;
+    font-size: 13px; font-weight: 600; background: transparent; color: #999; transition: transform 0.1s;
+  }
+  .skip-btn:hover { transform: scale(1.05); }
 
-  .label-badge {
+  .triage-badge {
     display: none; padding: 3px 10px; border-radius: 4px; font-size: 12px; font-weight: 600;
   }
-  .comment-card.handled .label-badge { display: inline-block; }
-  .comment-card.handled .actions .label-btn { display: none; }
-  .badge-Positive { background: #4ecca3; color: #1a1a2e; }
-  .badge-Negative { background: #e94560; color: #fff; }
-  .badge-Neutral { background: #6c757d; color: #fff; }
+  .comment-card.handled .triage-badge { display: inline-block; }
+  .comment-card.handled .triage-fields { display: none; }
+  .comment-card.handled .actions .submit-btn { display: none; }
+  .comment-card.handled .actions .skip-btn { display: none; }
+  .badge-labeled { background: #4ecca3; color: #1a1a2e; }
   .badge-Skipped { background: #333; color: #999; }
 
   .empty-state {
@@ -82,6 +98,8 @@
     <span class="skipped" id="stat-skipped">0 skipped</span>
     <span>|</span>
     <span id="stat-total">0 in file</span>
+    <span>|</span>
+    <span id="stat-triage" style="color:#f0a500">0 triage</span>
   </div>
   <span class="queue-info" id="queue-info"></span>
   <button class="btn-next" id="btn-next" onclick="nextPost()">Next Post &rarr;</button>
@@ -95,10 +113,44 @@
 let handledCount = 0;
 let totalComments = 0;
 
+const selections = {};
+
 function updateStats(stats) {
   document.getElementById('stat-labeled').textContent = stats.labeled + ' labeled';
   document.getElementById('stat-skipped').textContent = stats.skipped + ' skipped';
   document.getElementById('stat-total').textContent = stats.total_in_file + ' in file';
+  document.getElementById('stat-triage').textContent = stats.triage_in_file + ' triage';
+}
+
+function selectOpt(idx, field, value, btn) {
+  if (!selections[idx]) selections[idx] = {};
+  selections[idx][field] = value;
+  const row = btn.closest('.field-options');
+  row.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  const s = selections[idx];
+  document.getElementById('submit-' + idx).disabled = !(s.sentiment && s.intent && s.urgency);
+}
+
+async function submitTriage(idx) {
+  const card = document.getElementById('card-' + idx);
+  if (card.classList.contains('handled')) return;
+  const s = selections[idx];
+  if (!s || !s.sentiment || !s.intent || !s.urgency) return;
+  const body = card.querySelector('.body').textContent;
+  const resp = await fetch('/api/triage-label', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({text: body, sentiment: s.sentiment, intent: s.intent, urgency: s.urgency}),
+  });
+  const data = await resp.json();
+  card.classList.add('handled');
+  const badge = document.getElementById('badge-' + idx);
+  badge.textContent = s.sentiment + ' / ' + s.intent + ' / ' + s.urgency;
+  badge.className = 'triage-badge badge-labeled';
+  updateStats(data.stats);
+  handledCount++;
+  if (handledCount >= totalComments) autoAdvance();
 }
 
 function renderPost(data) {
@@ -128,12 +180,37 @@ function renderPost(data) {
         <span class="author">u/${esc(c.author)}</span> · ${c.score} points
       </div>
       <div class="body">${esc(c.body)}</div>
+      <div class="triage-fields" id="fields-${i}">
+        <div class="field-row">
+          <span class="field-label">Sentiment</span>
+          <div class="field-options">
+            <button class="opt-btn" onclick="selectOpt(${i},'sentiment','Positive',this)">Positive</button>
+            <button class="opt-btn" onclick="selectOpt(${i},'sentiment','Neutral',this)">Neutral</button>
+            <button class="opt-btn neg" onclick="selectOpt(${i},'sentiment','Negative',this)">Negative</button>
+          </div>
+        </div>
+        <div class="field-row">
+          <span class="field-label">Intent</span>
+          <div class="field-options">
+            <button class="opt-btn" onclick="selectOpt(${i},'intent','complaint',this)">complaint</button>
+            <button class="opt-btn" onclick="selectOpt(${i},'intent','praise',this)">praise</button>
+            <button class="opt-btn" onclick="selectOpt(${i},'intent','question',this)">question</button>
+            <button class="opt-btn" onclick="selectOpt(${i},'intent','suggestion',this)">suggestion</button>
+          </div>
+        </div>
+        <div class="field-row">
+          <span class="field-label">Urgency</span>
+          <div class="field-options">
+            <button class="opt-btn warn" onclick="selectOpt(${i},'urgency','urgent',this)">urgent</button>
+            <button class="opt-btn" onclick="selectOpt(${i},'urgency','normal',this)">normal</button>
+            <button class="opt-btn" onclick="selectOpt(${i},'urgency','low',this)">low</button>
+          </div>
+        </div>
+      </div>
       <div class="actions">
-        <button class="label-btn positive" onclick="labelComment(${i}, 'Positive')">Positive</button>
-        <button class="label-btn neutral" onclick="labelComment(${i}, 'Neutral')">Neutral</button>
-        <button class="label-btn negative" onclick="labelComment(${i}, 'Negative')">Negative</button>
-        <button class="label-btn skip" onclick="skipComment(${i})">Skip</button>
-        <span class="label-badge" id="badge-${i}"></span>
+        <button class="submit-btn" id="submit-${i}" onclick="submitTriage(${i})" disabled>Submit</button>
+        <button class="skip-btn" onclick="skipComment(${i})">Skip</button>
+        <span class="triage-badge" id="badge-${i}"></span>
       </div>
     </div>
   `).join('');
@@ -145,25 +222,6 @@ function esc(s) {
   return d.innerHTML;
 }
 
-async function labelComment(idx, label) {
-  const card = document.getElementById('card-' + idx);
-  if (card.classList.contains('handled')) return;
-  const body = card.querySelector('.body').textContent;
-  const resp = await fetch('/api/label', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({text: body, label: label}),
-  });
-  const data = await resp.json();
-  card.classList.add('handled');
-  const badge = document.getElementById('badge-' + idx);
-  badge.textContent = label;
-  badge.className = 'label-badge badge-' + label;
-  updateStats(data.stats);
-  handledCount++;
-  if (handledCount >= totalComments) autoAdvance();
-}
-
 async function skipComment(idx) {
   const card = document.getElementById('card-' + idx);
   if (card.classList.contains('handled')) return;
@@ -172,7 +230,7 @@ async function skipComment(idx) {
   card.classList.add('handled');
   const badge = document.getElementById('badge-' + idx);
   badge.textContent = 'Skipped';
-  badge.className = 'label-badge badge-Skipped';
+  badge.className = 'triage-badge badge-Skipped';
   updateStats(data.stats);
   handledCount++;
   if (handledCount >= totalComments) autoAdvance();
