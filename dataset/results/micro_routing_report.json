@@ -1,0 +1,2634 @@
+{
+  "micro_model": "llama3.2:3b",
+  "api_model": "gpt-4o-mini",
+  "num_examples": 30,
+  "routing": {
+    "total": 30,
+    "local_handled": 18,
+    "escalated": 12,
+    "local_pct": 60.0,
+    "escalated_pct": 40.0,
+    "reasons": {
+      "invalid_format": 0,
+      "consistency_mismatch": 12
+    }
+  },
+  "accuracy": {
+    "micro_only": {
+      "per_field_accuracy": {
+        "sentiment": 0.6,
+        "intent": 0.467,
+        "urgency": 0.367
+      },
+      "per_field_correct": {
+        "sentiment": 18,
+        "intent": 14,
+        "urgency": 11
+      },
+      "per_field_total": {
+        "sentiment": 30,
+        "intent": 30,
+        "urgency": 30
+      },
+      "all_correct": 4,
+      "all_correct_rate": 0.133
+    },
+    "routed": {
+      "per_field_accuracy": {
+        "sentiment": 0.724,
+        "intent": 0.448,
+        "urgency": 0.345
+      },
+      "per_field_correct": {
+        "sentiment": 21,
+        "intent": 13,
+        "urgency": 10
+      },
+      "per_field_total": {
+        "sentiment": 29,
+        "intent": 29,
+        "urgency": 29
+      },
+      "all_correct": 5,
+      "all_correct_rate": 0.167
+    },
+    "llm_only": {
+      "per_field_accuracy": {
+        "sentiment": 0.759,
+        "intent": 0.552,
+        "urgency": 0.517
+      },
+      "per_field_correct": {
+        "sentiment": 22,
+        "intent": 16,
+        "urgency": 15
+      },
+      "per_field_total": {
+        "sentiment": 29,
+        "intent": 29,
+        "urgency": 29
+      },
+      "all_correct": 9,
+      "all_correct_rate": 0.3
+    }
+  },
+  "latency": {
+    "micro_only": 0.516,
+    "routed": 1.666,
+    "llm_only": 0.999,
+    "routed_local_avg": 1.172,
+    "routed_escalated_avg": 2.407
+  },
+  "cost": {
+    "routed_api_calls": 12,
+    "routed_local_calls": 60,
+    "llm_only_api_calls": 30,
+    "routed_cost": 0.00034,
+    "llm_only_cost": 0.000915,
+    "savings_pct": 62.8
+  },
+  "results": [
+    {
+      "index": 1,
+      "input": "I feel like I game a lot regardless of my stress levels but ...",
+      "input_full": "I feel like I game a lot regardless of my stress levels but there was nowhere in the questionnaire to make a note about that.",
+      "expected": {
+        "sentiment": "Neutral",
+        "intent": "complaint",
+        "urgency": "normal"
+      },
+      "routed": {
+        "route": "ESCALATED",
+        "fields": {
+          "sentiment": "Neutral",
+          "intent": "complaint",
+          "urgency": "normal"
+        },
+        "sentiment": "Neutral",
+        "intent": "complaint",
+        "urgency": "normal",
+        "micro_raw": "{\"sentiment\": \"Negative\", \"intent\": \"complaint\", \"urgency\": \"normal\"}",
+        "micro_fields": {
+          "sentiment": "Negative",
+          "intent": "complaint",
+          "urgency": "normal"
+        },
+        "format_ok": true,
+        "consistency_detail": "mismatch:urgency",
+        "escalation_reason": "consistency_mismatch",
+        "local_calls": 2,
+        "api_calls": 1,
+        "prompt_tokens": 370,
+        "completion_tokens": 60,
+        "api_prompt_tokens": 114,
+        "api_completion_tokens": 16,
+        "latency": 6.826,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": true
+        },
+        "all_correct": true
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Negative",
+          "intent": "complaint",
+          "urgency": "normal"
+        },
+        "sentiment": "Negative",
+        "intent": "complaint",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.492,
+        "prompt_tokens": 128,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": false,
+          "intent": true,
+          "urgency": true
+        },
+        "all_correct": false
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Neutral",
+          "intent": "complaint",
+          "urgency": "normal"
+        },
+        "sentiment": "Neutral",
+        "intent": "complaint",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.657,
+        "prompt_tokens": 114,
+        "completion_tokens": 16,
+        "api_prompt_tokens": 114,
+        "api_completion_tokens": 16,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": true
+        },
+        "all_correct": true
+      }
+    },
+    {
+      "index": 2,
+      "input": "Done, good luck sir!\n\n![gif](giphy|7T2R1eAIKnEJnAf5U8)",
+      "input_full": "Done, good luck sir!\n\n![gif](giphy|7T2R1eAIKnEJnAf5U8)",
+      "expected": {
+        "sentiment": "Positive",
+        "intent": "suggestion",
+        "urgency": "low"
+      },
+      "routed": {
+        "route": "ESCALATED",
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "low"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "low",
+        "micro_raw": "{\"sentiment\": \"Positive\", \"intent\": \"praise\", \"urgency\": \"low\"}",
+        "micro_fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "low"
+        },
+        "format_ok": true,
+        "consistency_detail": "mismatch:urgency",
+        "escalation_reason": "consistency_mismatch",
+        "local_calls": 2,
+        "api_calls": 1,
+        "prompt_tokens": 375,
+        "completion_tokens": 65,
+        "api_prompt_tokens": 115,
+        "api_completion_tokens": 21,
+        "latency": 1.896,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": true
+        },
+        "all_correct": false
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "low"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "low",
+        "format_ok": true,
+        "latency": 0.469,
+        "prompt_tokens": 130,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": true
+        },
+        "all_correct": false
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "low"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "low",
+        "format_ok": true,
+        "latency": 0.92,
+        "prompt_tokens": 115,
+        "completion_tokens": 21,
+        "api_prompt_tokens": 115,
+        "api_completion_tokens": 21,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": true
+        },
+        "all_correct": false
+      }
+    },
+    {
+      "index": 3,
+      "input": "I just filled it out. I have two minor gripes. First, I play...",
+      "input_full": "I just filled it out. I have two minor gripes. First, I play on both PC and console but the question only let me choose one of them. Second, The refresh rate of my monitor (240 hz) was not available to choose\u2026",
+      "expected": {
+        "sentiment": "Negative",
+        "intent": "complaint",
+        "urgency": "urgent"
+      },
+      "routed": {
+        "route": "LOCAL",
+        "fields": {
+          "sentiment": "Negative",
+          "intent": "complaint",
+          "urgency": "normal"
+        },
+        "sentiment": "Negative",
+        "intent": "complaint",
+        "urgency": "normal",
+        "micro_raw": "{\"sentiment\": \"Negative\", \"intent\": \"complaint\", \"urgency\": \"normal\"}",
+        "micro_fields": {
+          "sentiment": "Negative",
+          "intent": "complaint",
+          "urgency": "normal"
+        },
+        "format_ok": true,
+        "consistency_detail": "match",
+        "escalation_reason": null,
+        "local_calls": 2,
+        "api_calls": 0,
+        "prompt_tokens": 308,
+        "completion_tokens": 44,
+        "api_prompt_tokens": 0,
+        "api_completion_tokens": 0,
+        "latency": 1.012,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Negative",
+          "intent": "complaint",
+          "urgency": "normal"
+        },
+        "sentiment": "Negative",
+        "intent": "complaint",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.468,
+        "prompt_tokens": 154,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Negative",
+          "intent": "complaint",
+          "urgency": "normal"
+        },
+        "sentiment": "Negative",
+        "intent": "complaint",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 1.036,
+        "prompt_tokens": 139,
+        "completion_tokens": 21,
+        "api_prompt_tokens": 139,
+        "api_completion_tokens": 21,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": false
+        },
+        "all_correct": false
+      }
+    },
+    {
+      "index": 4,
+      "input": "\ud83e\udef0\ud83c\udffb\ud83d\udc81\ud83c\udffb\u200d\u2640\ufe0f",
+      "input_full": "\ud83e\udef0\ud83c\udffb\ud83d\udc81\ud83c\udffb\u200d\u2640\ufe0f",
+      "expected": {
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "low"
+      },
+      "routed": {
+        "route": "ESCALATED",
+        "fields": {
+          "sentiment": "Neutral",
+          "intent": "question",
+          "urgency": "low"
+        },
+        "sentiment": "Neutral",
+        "intent": "question",
+        "urgency": "low",
+        "micro_raw": "{\"sentiment\": \"Positive\", \"intent\": \"praise\", \"urgency\": \"low\"}",
+        "micro_fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "low"
+        },
+        "format_ok": true,
+        "consistency_detail": "mismatch:sentiment",
+        "escalation_reason": "consistency_mismatch",
+        "local_calls": 2,
+        "api_calls": 1,
+        "prompt_tokens": 330,
+        "completion_tokens": 59,
+        "api_prompt_tokens": 98,
+        "api_completion_tokens": 15,
+        "latency": 1.938,
+        "fields_correct": {
+          "sentiment": false,
+          "intent": false,
+          "urgency": true
+        },
+        "all_correct": false
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "low"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "low",
+        "format_ok": true,
+        "latency": 0.543,
+        "prompt_tokens": 116,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": true
+        },
+        "all_correct": true
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Neutral",
+          "intent": "question",
+          "urgency": "low"
+        },
+        "sentiment": "Neutral",
+        "intent": "question",
+        "urgency": "low",
+        "format_ok": true,
+        "latency": 0.841,
+        "prompt_tokens": 98,
+        "completion_tokens": 15,
+        "api_prompt_tokens": 98,
+        "api_completion_tokens": 15,
+        "fields_correct": {
+          "sentiment": false,
+          "intent": false,
+          "urgency": true
+        },
+        "all_correct": false
+      }
+    },
+    {
+      "index": 5,
+      "input": "Green Bank is in an absolutely gorgeous part of the state. I...",
+      "input_full": "Green Bank is in an absolutely gorgeous part of the state. It's kind of fun being away from radio signals for a while. Highly recommend a visit if you're ever in the area. Plus, cool science stuff.",
+      "expected": {
+        "sentiment": "Positive",
+        "intent": "suggestion",
+        "urgency": "low"
+      },
+      "routed": {
+        "route": "LOCAL",
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "micro_raw": "{\"sentiment\": \"Positive\", \"intent\": \"praise\", \"urgency\": \"normal\"}",
+        "micro_fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "format_ok": true,
+        "consistency_detail": "match",
+        "escalation_reason": null,
+        "local_calls": 2,
+        "api_calls": 0,
+        "prompt_tokens": 292,
+        "completion_tokens": 44,
+        "api_prompt_tokens": 0,
+        "api_completion_tokens": 0,
+        "latency": 1.28,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.568,
+        "prompt_tokens": 146,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.944,
+        "prompt_tokens": 130,
+        "completion_tokens": 21,
+        "api_prompt_tokens": 130,
+        "api_completion_tokens": 21,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": false
+        },
+        "all_correct": false
+      }
+    },
+    {
+      "index": 6,
+      "input": "Guess I didn't get the role i auditioned for\ud83d\ude2d",
+      "input_full": "Guess I didn't get the role i auditioned for\ud83d\ude2d",
+      "expected": {
+        "sentiment": "Negative",
+        "intent": "complaint",
+        "urgency": "normal"
+      },
+      "routed": {
+        "route": "LOCAL",
+        "fields": {
+          "sentiment": "Negative",
+          "intent": "complaint",
+          "urgency": "low"
+        },
+        "sentiment": "Negative",
+        "intent": "complaint",
+        "urgency": "low",
+        "micro_raw": "{\"sentiment\": \"Negative\", \"intent\": \"complaint\", \"urgency\": \"low\"}",
+        "micro_fields": {
+          "sentiment": "Negative",
+          "intent": "complaint",
+          "urgency": "low"
+        },
+        "format_ok": true,
+        "consistency_detail": "match",
+        "escalation_reason": null,
+        "local_calls": 2,
+        "api_calls": 0,
+        "prompt_tokens": 230,
+        "completion_tokens": 44,
+        "api_prompt_tokens": 0,
+        "api_completion_tokens": 0,
+        "latency": 1.257,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Negative",
+          "intent": "complaint",
+          "urgency": "low"
+        },
+        "sentiment": "Negative",
+        "intent": "complaint",
+        "urgency": "low",
+        "format_ok": true,
+        "latency": 0.561,
+        "prompt_tokens": 115,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Negative",
+          "intent": "complaint",
+          "urgency": "normal"
+        },
+        "sentiment": "Negative",
+        "intent": "complaint",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 1.955,
+        "prompt_tokens": 99,
+        "completion_tokens": 21,
+        "api_prompt_tokens": 99,
+        "api_completion_tokens": 21,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": true
+        },
+        "all_correct": true
+      }
+    },
+    {
+      "index": 7,
+      "input": "Get ready for a Belushi MAGA shit film. Anything Belushi is ...",
+      "input_full": "Get ready for a Belushi MAGA shit film. Anything Belushi is bullshit.",
+      "expected": {
+        "sentiment": "Negative",
+        "intent": "complaint",
+        "urgency": "normal"
+      },
+      "routed": {
+        "route": "LOCAL",
+        "fields": {
+          "sentiment": "Negative",
+          "intent": "complaint",
+          "urgency": "normal"
+        },
+        "sentiment": "Negative",
+        "intent": "complaint",
+        "urgency": "normal",
+        "micro_raw": "{\"sentiment\": \"Negative\", \"intent\": \"complaint\", \"urgency\": \"normal\"}",
+        "micro_fields": {
+          "sentiment": "Negative",
+          "intent": "complaint",
+          "urgency": "normal"
+        },
+        "format_ok": true,
+        "consistency_detail": "match",
+        "escalation_reason": null,
+        "local_calls": 2,
+        "api_calls": 0,
+        "prompt_tokens": 238,
+        "completion_tokens": 44,
+        "api_prompt_tokens": 0,
+        "api_completion_tokens": 0,
+        "latency": 1.187,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": true
+        },
+        "all_correct": true
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Negative",
+          "intent": "complaint",
+          "urgency": "normal"
+        },
+        "sentiment": "Negative",
+        "intent": "complaint",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.448,
+        "prompt_tokens": 119,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": true
+        },
+        "all_correct": true
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Negative",
+          "intent": "complaint",
+          "urgency": "normal"
+        },
+        "sentiment": "Negative",
+        "intent": "complaint",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.829,
+        "prompt_tokens": 105,
+        "completion_tokens": 21,
+        "api_prompt_tokens": 105,
+        "api_completion_tokens": 21,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": true
+        },
+        "all_correct": true
+      }
+    },
+    {
+      "index": 8,
+      "input": "I\u2019m trying to read the entire long list before the prize is ...",
+      "input_full": "I\u2019m trying to read the entire long list before the prize is announced in June. I\u2019m about halfway through, and have read 3 of the 6 on the shortlist.\n\nFlashlight: good but not great; needed to be several chapters shorter but wrapped up well.\n\nThe Mercy Step: great; despite some heavy themes the story is told with a lightness and slight humour that makes it enjoyable.\n\nHeart the Lover: great; thought I would hate it as it\u2019s billed as a romance but the way the story spans a lifetime without getting bogged down in any boring bits works really well.",
+      "expected": {
+        "sentiment": "Positive",
+        "intent": "suggestion",
+        "urgency": "low"
+      },
+      "routed": {
+        "route": "LOCAL",
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "micro_raw": "{\"sentiment\": \"Positive\", \"intent\": \"praise\", \"urgency\": \"normal\"}",
+        "micro_fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "format_ok": true,
+        "consistency_detail": "match",
+        "escalation_reason": null,
+        "local_calls": 2,
+        "api_calls": 0,
+        "prompt_tokens": 446,
+        "completion_tokens": 44,
+        "api_prompt_tokens": 0,
+        "api_completion_tokens": 0,
+        "latency": 1.114,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.442,
+        "prompt_tokens": 223,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.629,
+        "prompt_tokens": 208,
+        "completion_tokens": 16,
+        "api_prompt_tokens": 208,
+        "api_completion_tokens": 16,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": false
+        },
+        "all_correct": false
+      }
+    },
+    {
+      "index": 9,
+      "input": "The only one of these I've read is The Correspondent and it ...",
+      "input_full": "The only one of these I've read is The Correspondent and it was my favorite read of last year, although it doesn't scream \"prize list\". \n\nI have Kingfisher checked out from the library right now and am hoping I can get to it before it's due back! I feel like a lot of others will want to read it now that it's shortlisted.",
+      "expected": {
+        "sentiment": "Positive",
+        "intent": "suggestion",
+        "urgency": "urgent"
+      },
+      "routed": {
+        "route": "ESCALATED",
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "micro_raw": "{\"sentiment\": \"Positive\", \"intent\": \"praise\", \"urgency\": \"low\"}",
+        "micro_fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "low"
+        },
+        "format_ok": true,
+        "consistency_detail": "mismatch:urgency",
+        "escalation_reason": "consistency_mismatch",
+        "local_calls": 2,
+        "api_calls": 1,
+        "prompt_tokens": 521,
+        "completion_tokens": 65,
+        "api_prompt_tokens": 161,
+        "api_completion_tokens": 21,
+        "latency": 1.855,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "low"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "low",
+        "format_ok": true,
+        "latency": 0.527,
+        "prompt_tokens": 180,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 3.021,
+        "prompt_tokens": 161,
+        "completion_tokens": 21,
+        "api_prompt_tokens": 161,
+        "api_completion_tokens": 21,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": false
+        },
+        "all_correct": false
+      }
+    },
+    {
+      "index": 10,
+      "input": "I go weekly. I was just at the library today. I borrow lots ...",
+      "input_full": "I go weekly. I was just at the library today. I borrow lots of books and movies too.",
+      "expected": {
+        "sentiment": "Neutral",
+        "intent": "suggestion",
+        "urgency": "normal"
+      },
+      "routed": {
+        "route": "LOCAL",
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "micro_raw": "{\"sentiment\": \"Positive\", \"intent\": \"praise\", \"urgency\": \"normal\"}",
+        "micro_fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "format_ok": true,
+        "consistency_detail": "match",
+        "escalation_reason": null,
+        "local_calls": 2,
+        "api_calls": 0,
+        "prompt_tokens": 246,
+        "completion_tokens": 44,
+        "api_prompt_tokens": 0,
+        "api_completion_tokens": 0,
+        "latency": 1.245,
+        "fields_correct": {
+          "sentiment": false,
+          "intent": false,
+          "urgency": true
+        },
+        "all_correct": false
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.601,
+        "prompt_tokens": 123,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": false,
+          "intent": false,
+          "urgency": true
+        },
+        "all_correct": false
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 1.226,
+        "prompt_tokens": 109,
+        "completion_tokens": 21,
+        "api_prompt_tokens": 109,
+        "api_completion_tokens": 21,
+        "fields_correct": {
+          "sentiment": false,
+          "intent": false,
+          "urgency": true
+        },
+        "all_correct": false
+      }
+    },
+    {
+      "index": 11,
+      "input": "My library doesn\u2019t even have late fees anymore. Libraries ki...",
+      "input_full": "My library doesn\u2019t even have late fees anymore. Libraries kick ass.",
+      "expected": {
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "low"
+      },
+      "routed": {
+        "route": "LOCAL",
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "micro_raw": "{\"sentiment\": \"Positive\", \"intent\": \"praise\", \"urgency\": \"normal\"}",
+        "micro_fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "format_ok": true,
+        "consistency_detail": "match",
+        "escalation_reason": null,
+        "local_calls": 2,
+        "api_calls": 0,
+        "prompt_tokens": 232,
+        "completion_tokens": 44,
+        "api_prompt_tokens": 0,
+        "api_completion_tokens": 0,
+        "latency": 1.188,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.535,
+        "prompt_tokens": 116,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.729,
+        "prompt_tokens": 102,
+        "completion_tokens": 21,
+        "api_prompt_tokens": 102,
+        "api_completion_tokens": 21,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": false
+        },
+        "all_correct": false
+      }
+    },
+    {
+      "index": 12,
+      "input": "2nd after Sopranos easily. Followed by Breaking Bad for crim...",
+      "input_full": "2nd after Sopranos easily. Followed by Breaking Bad for crime shows.",
+      "expected": {
+        "sentiment": "Positive",
+        "intent": "suggestion",
+        "urgency": "low"
+      },
+      "routed": {
+        "route": "LOCAL",
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "micro_raw": "{\"sentiment\": \"Positive\", \"intent\": \"praise\", \"urgency\": \"normal\"}",
+        "micro_fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "format_ok": true,
+        "consistency_detail": "match",
+        "escalation_reason": null,
+        "local_calls": 2,
+        "api_calls": 0,
+        "prompt_tokens": 240,
+        "completion_tokens": 44,
+        "api_prompt_tokens": 0,
+        "api_completion_tokens": 0,
+        "latency": 1.098,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.44,
+        "prompt_tokens": 120,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "low"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "low",
+        "format_ok": true,
+        "latency": 0.835,
+        "prompt_tokens": 105,
+        "completion_tokens": 21,
+        "api_prompt_tokens": 105,
+        "api_completion_tokens": 21,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": true
+        },
+        "all_correct": false
+      }
+    },
+    {
+      "index": 13,
+      "input": "I hear so many good things about this show, but I just haven...",
+      "input_full": "I hear so many good things about this show, but I just haven\u2019t gotten around to watching it yet. \n\nIs it really that good?- like you\u2019re saying this is top all time. I\u2019m getting FOMO now lol",
+      "expected": {
+        "sentiment": "Neutral",
+        "intent": "question",
+        "urgency": "urgent"
+      },
+      "routed": {
+        "route": "ESCALATED",
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "question",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "question",
+        "urgency": "normal",
+        "micro_raw": "{\"sentiment\": \"Positive\", \"intent\": \"praise\", \"urgency\": \"low\"}",
+        "micro_fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "low"
+        },
+        "format_ok": true,
+        "consistency_detail": "mismatch:sentiment,intent,urgency",
+        "escalation_reason": "consistency_mismatch",
+        "local_calls": 2,
+        "api_calls": 1,
+        "prompt_tokens": 432,
+        "completion_tokens": 63,
+        "api_prompt_tokens": 134,
+        "api_completion_tokens": 20,
+        "latency": 2.627,
+        "fields_correct": {
+          "sentiment": false,
+          "intent": true,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "low"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "low",
+        "format_ok": true,
+        "latency": 0.475,
+        "prompt_tokens": 149,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": false,
+          "intent": false,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "question",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "question",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.819,
+        "prompt_tokens": 134,
+        "completion_tokens": 20,
+        "api_prompt_tokens": 134,
+        "api_completion_tokens": 20,
+        "fields_correct": {
+          "sentiment": false,
+          "intent": true,
+          "urgency": false
+        },
+        "all_correct": false
+      }
+    },
+    {
+      "index": 14,
+      "input": "Smart choice",
+      "input_full": "Smart choice",
+      "expected": {
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "low"
+      },
+      "routed": {
+        "route": "ESCALATED",
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "micro_raw": "{\"sentiment\": \"Positive\", \"intent\": \"praise\", \"urgency\": \"normal\"}",
+        "micro_fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "format_ok": true,
+        "consistency_detail": "mismatch:urgency",
+        "escalation_reason": "consistency_mismatch",
+        "local_calls": 2,
+        "api_calls": 1,
+        "prompt_tokens": 298,
+        "completion_tokens": 60,
+        "api_prompt_tokens": 90,
+        "api_completion_tokens": 16,
+        "latency": 1.746,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.462,
+        "prompt_tokens": 104,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "low"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "low",
+        "format_ok": true,
+        "latency": 0.937,
+        "prompt_tokens": 90,
+        "completion_tokens": 21,
+        "api_prompt_tokens": 90,
+        "api_completion_tokens": 21,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": true
+        },
+        "all_correct": true
+      }
+    },
+    {
+      "index": 15,
+      "input": "Oh, that\u2019s pretty exciting! I\u2019ve listened to this on YouTube...",
+      "input_full": "Oh, that\u2019s pretty exciting! I\u2019ve listened to this on YouTube a bunch, it\u2019s pretty great for about 3/4 of its runtime (falls off hard after \u201cGet in the Water\u201d). Hopefully while turning it into an official movie they can tweak the ending some. But either way I\u2019ll be curious to see how it turns out",
+      "expected": {
+        "sentiment": "Positive",
+        "intent": "suggestion",
+        "urgency": "normal"
+      },
+      "routed": {
+        "route": "LOCAL",
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "micro_raw": "{\"sentiment\": \"Positive\", \"intent\": \"praise\", \"urgency\": \"normal\"}",
+        "micro_fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "format_ok": true,
+        "consistency_detail": "match",
+        "escalation_reason": null,
+        "local_calls": 2,
+        "api_calls": 0,
+        "prompt_tokens": 342,
+        "completion_tokens": 44,
+        "api_prompt_tokens": 0,
+        "api_completion_tokens": 0,
+        "latency": 1.05,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": true
+        },
+        "all_correct": false
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.433,
+        "prompt_tokens": 171,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": true
+        },
+        "all_correct": false
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "suggestion",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "suggestion",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.717,
+        "prompt_tokens": 158,
+        "completion_tokens": 21,
+        "api_prompt_tokens": 158,
+        "api_completion_tokens": 21,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": true
+        },
+        "all_correct": true
+      }
+    },
+    {
+      "index": 16,
+      "input": "Yes please",
+      "input_full": "Yes please",
+      "expected": {
+        "sentiment": "Neutral",
+        "intent": "suggestion",
+        "urgency": "normal"
+      },
+      "routed": {
+        "route": "LOCAL",
+        "fields": {
+          "sentiment": "Neutral",
+          "intent": "question",
+          "urgency": "low"
+        },
+        "sentiment": "Neutral",
+        "intent": "question",
+        "urgency": "low",
+        "micro_raw": "{\"sentiment\": \"Neutral\", \"intent\": \"question\", \"urgency\": \"low\"}",
+        "micro_fields": {
+          "sentiment": "Neutral",
+          "intent": "question",
+          "urgency": "low"
+        },
+        "format_ok": true,
+        "consistency_detail": "match",
+        "escalation_reason": null,
+        "local_calls": 2,
+        "api_calls": 0,
+        "prompt_tokens": 208,
+        "completion_tokens": 42,
+        "api_prompt_tokens": 0,
+        "api_completion_tokens": 0,
+        "latency": 0.91,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Neutral",
+          "intent": "question",
+          "urgency": "low"
+        },
+        "sentiment": "Neutral",
+        "intent": "question",
+        "urgency": "low",
+        "format_ok": true,
+        "latency": 0.407,
+        "prompt_tokens": 104,
+        "completion_tokens": 21,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.774,
+        "prompt_tokens": 90,
+        "completion_tokens": 16,
+        "api_prompt_tokens": 90,
+        "api_completion_tokens": 16,
+        "fields_correct": {
+          "sentiment": false,
+          "intent": false,
+          "urgency": true
+        },
+        "all_correct": false
+      }
+    },
+    {
+      "index": 17,
+      "input": "Well first of all I think it's very unfair when people rate ...",
+      "input_full": "Well first of all I think it's very unfair when people rate ongoing shows and finished shows. I see this a lot with House of the Dragon compared to Game of Thrones. If Game of Thrones was releasing today, people would complain about it in the same exact way - but when the show finishes and you see the final product - even with awful finale, most people will still appreciate it much more.\n\nThen another similar thing is that there's nothing that's 100% and nothing that's 0%. If you rate a show like that you're telling me that you cannot see over your bias or that you are dismissing too many elements to be reliable. A show is not just the writing or directing and let's take Game of Thrones again - Season 8 has one of the worst writings we have all seen but the production design, cinematography and all these things should still be enough to appreciate that and if you're rating it with 1/10 because of bad writing then you directly dismiss all that makes a TV show different from a book.\n\nI personally rate episodes and seasons as stand-alone thing but always keep open doors for what the next episode or next season can offer and how this episode/season contributes to that. Unless I find it unwatchable so I just stop watching",
+      "expected": {
+        "sentiment": "Negative",
+        "intent": "suggestion",
+        "urgency": "low"
+      },
+      "routed": {
+        "route": "LOCAL",
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "suggestion",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "suggestion",
+        "urgency": "normal",
+        "micro_raw": "{\"sentiment\": \"Positive\", \"intent\": \"suggestion\", \"urgency\": \"normal\"}",
+        "micro_fields": {
+          "sentiment": "Positive",
+          "intent": "suggestion",
+          "urgency": "normal"
+        },
+        "format_ok": true,
+        "consistency_detail": "match",
+        "escalation_reason": null,
+        "local_calls": 2,
+        "api_calls": 0,
+        "prompt_tokens": 718,
+        "completion_tokens": 44,
+        "api_prompt_tokens": 0,
+        "api_completion_tokens": 0,
+        "latency": 1.308,
+        "fields_correct": {
+          "sentiment": false,
+          "intent": true,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "suggestion",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "suggestion",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.433,
+        "prompt_tokens": 359,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": false,
+          "intent": true,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Neutral",
+          "intent": "suggestion",
+          "urgency": "normal"
+        },
+        "sentiment": "Neutral",
+        "intent": "suggestion",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.681,
+        "prompt_tokens": 339,
+        "completion_tokens": 21,
+        "api_prompt_tokens": 339,
+        "api_completion_tokens": 21,
+        "fields_correct": {
+          "sentiment": false,
+          "intent": true,
+          "urgency": false
+        },
+        "all_correct": false
+      }
+    },
+    {
+      "index": 18,
+      "input": "Would interest me too",
+      "input_full": "Would interest me too",
+      "expected": {
+        "sentiment": "Neutral",
+        "intent": "suggestion",
+        "urgency": "low"
+      },
+      "routed": {
+        "route": "ESCALATED",
+        "fields": {
+          "sentiment": "Neutral",
+          "intent": "question",
+          "urgency": "low"
+        },
+        "sentiment": "Neutral",
+        "intent": "question",
+        "urgency": "low",
+        "micro_raw": "{\"sentiment\": \"Positive\", \"intent\": \"praise\", \"urgency\": \"low\"}",
+        "micro_fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "low"
+        },
+        "format_ok": true,
+        "consistency_detail": "mismatch:sentiment,intent",
+        "escalation_reason": "consistency_mismatch",
+        "local_calls": 2,
+        "api_calls": 1,
+        "prompt_tokens": 304,
+        "completion_tokens": 58,
+        "api_prompt_tokens": 92,
+        "api_completion_tokens": 15,
+        "latency": 1.71,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": true
+        },
+        "all_correct": false
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "low"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "low",
+        "format_ok": true,
+        "latency": 0.483,
+        "prompt_tokens": 106,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": false,
+          "intent": false,
+          "urgency": true
+        },
+        "all_correct": false
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Neutral",
+          "intent": "question",
+          "urgency": "low"
+        },
+        "sentiment": "Neutral",
+        "intent": "question",
+        "urgency": "low",
+        "format_ok": true,
+        "latency": 0.754,
+        "prompt_tokens": 92,
+        "completion_tokens": 15,
+        "api_prompt_tokens": 92,
+        "api_completion_tokens": 15,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": true
+        },
+        "all_correct": false
+      }
+    },
+    {
+      "index": 19,
+      "input": "Has very diehard fans. The first five seasons were insanely ...",
+      "input_full": "Has very diehard fans. The first five seasons were insanely well done. Like any show, gets a bit off track. Finale was awful and rushed but it was during Covid so \ud83e\udd37\ud83c\udffb\u200d\u2640\ufe0f. Worth the watch 100%",
+      "expected": {
+        "sentiment": "Positive",
+        "intent": "complaint",
+        "urgency": "low"
+      },
+      "routed": {
+        "route": "LOCAL",
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "micro_raw": "{\"sentiment\": \"Positive\", \"intent\": \"praise\", \"urgency\": \"normal\"}",
+        "micro_fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "format_ok": true,
+        "consistency_detail": "match",
+        "escalation_reason": null,
+        "local_calls": 2,
+        "api_calls": 0,
+        "prompt_tokens": 310,
+        "completion_tokens": 44,
+        "api_prompt_tokens": 0,
+        "api_completion_tokens": 0,
+        "latency": 1.141,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.585,
+        "prompt_tokens": 155,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.699,
+        "prompt_tokens": 137,
+        "completion_tokens": 21,
+        "api_prompt_tokens": 137,
+        "api_completion_tokens": 21,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": false
+        },
+        "all_correct": false
+      }
+    },
+    {
+      "index": 20,
+      "input": "First 5 seasons are VERY GOOD.\n\nThe next 10 are enjoyable en...",
+      "input_full": "First 5 seasons are VERY GOOD.\n\nThe next 10 are enjoyable enough. Lots of mythology to take in.",
+      "expected": {
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "low"
+      },
+      "routed": {
+        "route": "LOCAL",
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "micro_raw": "{\"sentiment\": \"Positive\", \"intent\": \"praise\", \"urgency\": \"normal\"}",
+        "micro_fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "format_ok": true,
+        "consistency_detail": "match",
+        "escalation_reason": null,
+        "local_calls": 2,
+        "api_calls": 0,
+        "prompt_tokens": 250,
+        "completion_tokens": 44,
+        "api_prompt_tokens": 0,
+        "api_completion_tokens": 0,
+        "latency": 1.425,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.465,
+        "prompt_tokens": 125,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.789,
+        "prompt_tokens": 111,
+        "completion_tokens": 21,
+        "api_prompt_tokens": 111,
+        "api_completion_tokens": 21,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": false
+        },
+        "all_correct": false
+      }
+    },
+    {
+      "index": 21,
+      "input": "Love it :)",
+      "input_full": "Love it :)",
+      "expected": {
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "low"
+      },
+      "routed": {
+        "route": "LOCAL",
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "micro_raw": "{\"sentiment\": \"Positive\", \"intent\": \"praise\", \"urgency\": \"normal\"}",
+        "micro_fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "format_ok": true,
+        "consistency_detail": "match",
+        "escalation_reason": null,
+        "local_calls": 2,
+        "api_calls": 0,
+        "prompt_tokens": 210,
+        "completion_tokens": 44,
+        "api_prompt_tokens": 0,
+        "api_completion_tokens": 0,
+        "latency": 1.014,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.461,
+        "prompt_tokens": 105,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "low"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "low",
+        "format_ok": true,
+        "latency": 2.955,
+        "prompt_tokens": 91,
+        "completion_tokens": 21,
+        "api_prompt_tokens": 91,
+        "api_completion_tokens": 21,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": true
+        },
+        "all_correct": true
+      }
+    },
+    {
+      "index": 22,
+      "input": "It\u2019s not really a hot take if it\u2019s just your personal opinio...",
+      "input_full": "It\u2019s not really a hot take if it\u2019s just your personal opinion",
+      "expected": {
+        "sentiment": "Neutral",
+        "intent": "suggestion",
+        "urgency": "normal"
+      },
+      "routed": {
+        "route": "ESCALATED",
+        "fields": {
+          "sentiment": "Neutral",
+          "intent": "question",
+          "urgency": "normal"
+        },
+        "sentiment": "Neutral",
+        "intent": "question",
+        "urgency": "normal",
+        "micro_raw": "{\"sentiment\": \"Negative\", \"intent\": \"praise\", \"urgency\": \"normal\"}",
+        "micro_fields": {
+          "sentiment": "Negative",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "format_ok": true,
+        "consistency_detail": "mismatch:urgency",
+        "escalation_reason": "consistency_mismatch",
+        "local_calls": 2,
+        "api_calls": 1,
+        "prompt_tokens": 334,
+        "completion_tokens": 59,
+        "api_prompt_tokens": 102,
+        "api_completion_tokens": 15,
+        "latency": 2.191,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": true
+        },
+        "all_correct": false
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Negative",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Negative",
+        "intent": "praise",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.613,
+        "prompt_tokens": 116,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": false,
+          "intent": false,
+          "urgency": true
+        },
+        "all_correct": false
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Neutral",
+          "intent": "question",
+          "urgency": "normal"
+        },
+        "sentiment": "Neutral",
+        "intent": "question",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.718,
+        "prompt_tokens": 102,
+        "completion_tokens": 15,
+        "api_prompt_tokens": 102,
+        "api_completion_tokens": 15,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": true
+        },
+        "all_correct": false
+      }
+    },
+    {
+      "index": 23,
+      "input": "I have to agree with you. While I found the graphics to be s...",
+      "input_full": "I have to agree with you. While I found the graphics to be spectacular, the overall gameplay was lacking and repetitive. The story is fine, but pretty weak. The highlight I would say is the kaiju fight towards the end.\n\nOverall 7/10.",
+      "expected": {
+        "sentiment": "Neutral",
+        "intent": "complaint",
+        "urgency": "low"
+      },
+      "routed": {
+        "route": "ESCALATED",
+        "fields": {
+          "sentiment": "Neutral",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Neutral",
+        "intent": "praise",
+        "urgency": "normal",
+        "micro_raw": "{\"sentiment\": \"Positive\", \"intent\": \"praise\", \"urgency\": \"normal\"}",
+        "micro_fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "format_ok": true,
+        "consistency_detail": "mismatch:sentiment,intent",
+        "escalation_reason": "consistency_mismatch",
+        "local_calls": 2,
+        "api_calls": 1,
+        "prompt_tokens": 453,
+        "completion_tokens": 60,
+        "api_prompt_tokens": 141,
+        "api_completion_tokens": 16,
+        "latency": 2.048,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.621,
+        "prompt_tokens": 156,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": false,
+          "intent": false,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Neutral",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Neutral",
+        "intent": "praise",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.689,
+        "prompt_tokens": 141,
+        "completion_tokens": 21,
+        "api_prompt_tokens": 141,
+        "api_completion_tokens": 21,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": false,
+          "urgency": false
+        },
+        "all_correct": false
+      }
+    },
+    {
+      "index": 24,
+      "input": "This is actually really relatable. Your emotional state can ...",
+      "input_full": "This is actually really relatable. Your emotional state can absolutely change how a book lands, especially with character-driven stories.",
+      "expected": {
+        "sentiment": "Neutral",
+        "intent": "suggestion",
+        "urgency": "low"
+      },
+      "routed": {
+        "route": "LOCAL",
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "micro_raw": "{\"sentiment\": \"Positive\", \"intent\": \"praise\", \"urgency\": \"normal\"}",
+        "micro_fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "format_ok": true,
+        "consistency_detail": "match",
+        "escalation_reason": null,
+        "local_calls": 2,
+        "api_calls": 0,
+        "prompt_tokens": 252,
+        "completion_tokens": 44,
+        "api_prompt_tokens": 0,
+        "api_completion_tokens": 0,
+        "latency": 1.217,
+        "fields_correct": {
+          "sentiment": false,
+          "intent": false,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.597,
+        "prompt_tokens": 126,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": false,
+          "intent": false,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.946,
+        "prompt_tokens": 111,
+        "completion_tokens": 21,
+        "api_prompt_tokens": 111,
+        "api_completion_tokens": 21,
+        "fields_correct": {
+          "sentiment": false,
+          "intent": false,
+          "urgency": false
+        },
+        "all_correct": false
+      }
+    },
+    {
+      "index": 25,
+      "input": "I have not personally noticed this for my cycle specifically...",
+      "input_full": "I have not personally noticed this for my cycle specifically because I never felt like my period really affected my mental state much (it's just bad month round lol), but I think just in general it's very normal that how you feel about a book or anything really is affected by your emotions and well-being.",
+      "expected": {
+        "sentiment": "Neutral",
+        "intent": "suggestion",
+        "urgency": "normal"
+      },
+      "routed": {
+        "route": "ESCALATED",
+        "fields": null,
+        "sentiment": null,
+        "intent": null,
+        "urgency": null,
+        "micro_raw": "{\"sentiment\": \"Positive\", \"intent\": \"suggestion\", \"urgency\": \"normal\"}",
+        "micro_fields": {
+          "sentiment": "Positive",
+          "intent": "suggestion",
+          "urgency": "normal"
+        },
+        "format_ok": true,
+        "consistency_detail": "mismatch:intent",
+        "escalation_reason": "consistency_mismatch",
+        "local_calls": 2,
+        "api_calls": 1,
+        "prompt_tokens": 473,
+        "completion_tokens": 64,
+        "api_prompt_tokens": 147,
+        "api_completion_tokens": 21,
+        "latency": 1.975,
+        "fields_correct": {
+          "sentiment": null,
+          "intent": null,
+          "urgency": null
+        },
+        "all_correct": true
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "suggestion",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "suggestion",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.616,
+        "prompt_tokens": 163,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": false,
+          "intent": true,
+          "urgency": true
+        },
+        "all_correct": false
+      },
+      "llm_only": {
+        "fields": null,
+        "sentiment": null,
+        "intent": null,
+        "urgency": null,
+        "format_ok": false,
+        "latency": 0.68,
+        "prompt_tokens": 147,
+        "completion_tokens": 21,
+        "api_prompt_tokens": 147,
+        "api_completion_tokens": 21,
+        "fields_correct": {
+          "sentiment": null,
+          "intent": null,
+          "urgency": null
+        },
+        "all_correct": true
+      }
+    },
+    {
+      "index": 26,
+      "input": "You should finish the book stoned and comeback and report.",
+      "input_full": "You should finish the book stoned and comeback and report.",
+      "expected": {
+        "sentiment": "Neutral",
+        "intent": "suggestion",
+        "urgency": "urgent"
+      },
+      "routed": {
+        "route": "LOCAL",
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "low"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "low",
+        "micro_raw": "{\"sentiment\": \"Positive\", \"intent\": \"praise\", \"urgency\": \"low\"}",
+        "micro_fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "low"
+        },
+        "format_ok": true,
+        "consistency_detail": "match",
+        "escalation_reason": null,
+        "local_calls": 2,
+        "api_calls": 0,
+        "prompt_tokens": 228,
+        "completion_tokens": 44,
+        "api_prompt_tokens": 0,
+        "api_completion_tokens": 0,
+        "latency": 1.238,
+        "fields_correct": {
+          "sentiment": false,
+          "intent": false,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "low"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "low",
+        "format_ok": true,
+        "latency": 0.582,
+        "prompt_tokens": 114,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": false,
+          "intent": false,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Neutral",
+          "intent": "suggestion",
+          "urgency": "normal"
+        },
+        "sentiment": "Neutral",
+        "intent": "suggestion",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.698,
+        "prompt_tokens": 100,
+        "completion_tokens": 16,
+        "api_prompt_tokens": 100,
+        "api_completion_tokens": 16,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": false
+        },
+        "all_correct": false
+      }
+    },
+    {
+      "index": 27,
+      "input": "She was amazing! Loved her in everything. I hope Eugene Levy...",
+      "input_full": "She was amazing! Loved her in everything. I hope Eugene Levy is doing okay because they were a remarkable on-screen couple every time they appeared together. She is truly missed.",
+      "expected": {
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal"
+      },
+      "routed": {
+        "route": "LOCAL",
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "micro_raw": "{\"sentiment\": \"Positive\", \"intent\": \"praise\", \"urgency\": \"normal\"}",
+        "micro_fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "format_ok": true,
+        "consistency_detail": "match",
+        "escalation_reason": null,
+        "local_calls": 2,
+        "api_calls": 0,
+        "prompt_tokens": 274,
+        "completion_tokens": 44,
+        "api_prompt_tokens": 0,
+        "api_completion_tokens": 0,
+        "latency": 1.161,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": true
+        },
+        "all_correct": true
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "normal"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.417,
+        "prompt_tokens": 137,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": true
+        },
+        "all_correct": true
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Positive",
+          "intent": "praise",
+          "urgency": "low"
+        },
+        "sentiment": "Positive",
+        "intent": "praise",
+        "urgency": "low",
+        "format_ok": true,
+        "latency": 1.021,
+        "prompt_tokens": 123,
+        "completion_tokens": 21,
+        "api_prompt_tokens": 123,
+        "api_completion_tokens": 21,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": false
+        },
+        "all_correct": false
+      }
+    },
+    {
+      "index": 28,
+      "input": "Nobody's stopping you from just watching a bunch of music vi...",
+      "input_full": "Nobody's stopping you from just watching a bunch of music videos",
+      "expected": {
+        "sentiment": "Neutral",
+        "intent": "suggestion",
+        "urgency": "normal"
+      },
+      "routed": {
+        "route": "LOCAL",
+        "fields": {
+          "sentiment": "Negative",
+          "intent": "praise",
+          "urgency": "low"
+        },
+        "sentiment": "Negative",
+        "intent": "praise",
+        "urgency": "low",
+        "micro_raw": "{\"sentiment\": \"Negative\", \"intent\": \"praise\", \"urgency\": \"low\"}",
+        "micro_fields": {
+          "sentiment": "Negative",
+          "intent": "praise",
+          "urgency": "low"
+        },
+        "format_ok": true,
+        "consistency_detail": "match",
+        "escalation_reason": null,
+        "local_calls": 2,
+        "api_calls": 0,
+        "prompt_tokens": 228,
+        "completion_tokens": 44,
+        "api_prompt_tokens": 0,
+        "api_completion_tokens": 0,
+        "latency": 1.258,
+        "fields_correct": {
+          "sentiment": false,
+          "intent": false,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Negative",
+          "intent": "praise",
+          "urgency": "low"
+        },
+        "sentiment": "Negative",
+        "intent": "praise",
+        "urgency": "low",
+        "format_ok": true,
+        "latency": 0.571,
+        "prompt_tokens": 114,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": false,
+          "intent": false,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Neutral",
+          "intent": "suggestion",
+          "urgency": "normal"
+        },
+        "sentiment": "Neutral",
+        "intent": "suggestion",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 1.116,
+        "prompt_tokens": 100,
+        "completion_tokens": 16,
+        "api_prompt_tokens": 100,
+        "api_completion_tokens": 16,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": true
+        },
+        "all_correct": true
+      }
+    },
+    {
+      "index": 29,
+      "input": "If you only care about the music, then why watch this movie?...",
+      "input_full": "If you only care about the music, then why watch this movie? When you say you don\u2019t care about the plot, then all you\u2019re left with is a karaoke performance by an actor who doesn\u2019t *really* look like the real guy anyway.\n\nMight as well just watch the real thing on YouTube.",
+      "expected": {
+        "sentiment": "Neutral",
+        "intent": "complaint",
+        "urgency": "low"
+      },
+      "routed": {
+        "route": "ESCALATED",
+        "fields": {
+          "sentiment": "Negative",
+          "intent": "complaint",
+          "urgency": "normal"
+        },
+        "sentiment": "Negative",
+        "intent": "complaint",
+        "urgency": "normal",
+        "micro_raw": "{\"sentiment\": \"Negative\", \"intent\": \"complaint\", \"urgency\": \"normal\"}",
+        "micro_fields": {
+          "sentiment": "Negative",
+          "intent": "complaint",
+          "urgency": "normal"
+        },
+        "format_ok": true,
+        "consistency_detail": "mismatch:urgency",
+        "escalation_reason": "consistency_mismatch",
+        "local_calls": 2,
+        "api_calls": 1,
+        "prompt_tokens": 484,
+        "completion_tokens": 60,
+        "api_prompt_tokens": 152,
+        "api_completion_tokens": 16,
+        "latency": 2.304,
+        "fields_correct": {
+          "sentiment": false,
+          "intent": true,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Negative",
+          "intent": "complaint",
+          "urgency": "normal"
+        },
+        "sentiment": "Negative",
+        "intent": "complaint",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.576,
+        "prompt_tokens": 166,
+        "completion_tokens": 22,
+        "fields_correct": {
+          "sentiment": false,
+          "intent": true,
+          "urgency": false
+        },
+        "all_correct": false
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Negative",
+          "intent": "complaint",
+          "urgency": "normal"
+        },
+        "sentiment": "Negative",
+        "intent": "complaint",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.684,
+        "prompt_tokens": 152,
+        "completion_tokens": 16,
+        "api_prompt_tokens": 152,
+        "api_completion_tokens": 16,
+        "fields_correct": {
+          "sentiment": false,
+          "intent": true,
+          "urgency": false
+        },
+        "all_correct": false
+      }
+    },
+    {
+      "index": 30,
+      "input": "So we are sending michael phelps?",
+      "input_full": "So we are sending michael phelps?",
+      "expected": {
+        "sentiment": "Neutral",
+        "intent": "question",
+        "urgency": "normal"
+      },
+      "routed": {
+        "route": "ESCALATED",
+        "fields": {
+          "sentiment": "Neutral",
+          "intent": "question",
+          "urgency": "normal"
+        },
+        "sentiment": "Neutral",
+        "intent": "question",
+        "urgency": "normal",
+        "micro_raw": "{\"sentiment\": \"Neutral\", \"intent\": \"question\", \"urgency\": \"normal\"}",
+        "micro_fields": {
+          "sentiment": "Neutral",
+          "intent": "question",
+          "urgency": "normal"
+        },
+        "format_ok": true,
+        "consistency_detail": "mismatch:sentiment,intent",
+        "escalation_reason": "consistency_mismatch",
+        "local_calls": 2,
+        "api_calls": 1,
+        "prompt_tokens": 316,
+        "completion_tokens": 58,
+        "api_prompt_tokens": 96,
+        "api_completion_tokens": 15,
+        "latency": 1.772,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": true
+        },
+        "all_correct": true
+      },
+      "micro_only": {
+        "fields": {
+          "sentiment": "Neutral",
+          "intent": "question",
+          "urgency": "normal"
+        },
+        "sentiment": "Neutral",
+        "intent": "question",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.598,
+        "prompt_tokens": 110,
+        "completion_tokens": 21,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": true
+        },
+        "all_correct": true
+      },
+      "llm_only": {
+        "fields": {
+          "sentiment": "Neutral",
+          "intent": "question",
+          "urgency": "normal"
+        },
+        "sentiment": "Neutral",
+        "intent": "question",
+        "urgency": "normal",
+        "format_ok": true,
+        "latency": 0.676,
+        "prompt_tokens": 96,
+        "completion_tokens": 15,
+        "api_prompt_tokens": 96,
+        "api_completion_tokens": 15,
+        "fields_correct": {
+          "sentiment": true,
+          "intent": true,
+          "urgency": true
+        },
+        "all_correct": true
+      }
+    }
+  ]
+}
