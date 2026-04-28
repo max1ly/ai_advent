@@ -494,23 +494,23 @@ export async function indexProjectDocs(): Promise<void> {
   const root = process.cwd();
   const filesToIndex: { path: string; name: string }[] = [];
 
-  // README.md
-  try {
-    statSync(join(root, 'README.md'));
-    filesToIndex.push({ path: join(root, 'README.md'), name: 'README.md' });
-  } catch { /* doesn't exist */ }
+  // README.md — skip auto-indexing (user-indexed docs only via /api/index)
+  // try {
+  //   statSync(join(root, 'README.md'));
+  //   filesToIndex.push({ path: join(root, 'README.md'), name: 'README.md' });
+  // } catch { /* doesn't exist */ }
 
-  // docs/*.md (top-level only — skip nested plans/specs/research)
-  const docsDir = join(root, 'docs');
-  try {
-    const entries = readdirSync(docsDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isDirectory() && entry.name.endsWith('.md')) {
-        const fullPath = join(docsDir, entry.name);
-        filesToIndex.push({ path: fullPath, name: relative(root, fullPath) });
-      }
-    }
-  } catch { /* docs/ doesn't exist */ }
+  // docs/*.md — skip auto-indexing (user-indexed docs only via /api/index)
+  // const docsDir = join(root, 'docs');
+  // try {
+  //   const entries = readdirSync(docsDir, { withFileTypes: true });
+  //   for (const entry of entries) {
+  //     if (!entry.isDirectory() && entry.name.endsWith('.md')) {
+  //       const fullPath = join(docsDir, entry.name);
+  //       filesToIndex.push({ path: fullPath, name: relative(root, fullPath) });
+  //     }
+  //   }
+  // } catch { /* docs/ doesn't exist */ }
 
   if (filesToIndex.length === 0) {
     console.log('\x1b[36m[DevAssistant]\x1b[0m No project docs found to index');
