@@ -1,0 +1,29 @@
+{
+  "name": "day13-llm-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev":        "tsx watch --env-file=.env.local src/server.ts",
+    "start":      "node --enable-source-maps dist/server.js",
+    "build":      "tsc -p .",
+    "test":       "vitest run",
+    "test:watch": "vitest",
+    "acceptance": "tsx scripts/run-acceptance.ts"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "nanoid": "^5.0.9",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8",
+    "supertest": "^7.0.0",
+    "@types/supertest": "^6.0.2"
+  }
+}
